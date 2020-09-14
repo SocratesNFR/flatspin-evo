@@ -616,4 +616,17 @@ def min_flips_fitness(pop, gen, outdir):
 def main(outdir=r"results\tileTest", inner=min_flips_fitness, **kwargs):
     return ea.main(outdir, Individual, inner, evaluate_outer, **kwargs)
 
+
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
+if __name__ == '__main__':
+    import argparse
+    from flatspin.cmdline import StoreKeyValue, eval_params
+
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    # common
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        help=r'¯\_(ツ)_/¯')
+    parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={})
+    args = parser.parse_args()
+    main(outdir=args.output, **eval_params(args.parameter))
