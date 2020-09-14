@@ -575,10 +575,10 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     # =============================================================================
 
 
-def flips_max_fitness(pop, gen, outdir):
+def flips_max_fitness(pop, gen, outdir, run="local"):
     if len(pop) < 1:
         return pop
-    shared_params = {"model": "CustomSpinIce", "encoder": "sin", "H": 0.08, "phi": 30, "radians": True,
+    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "sin", "H": 0.08, "phi": 30, "radians": True,
                      "periods": 10, "use_opencl": False, "basepath": os.path.join(outdir, f"gen{gen}")}
     run_params = []
     for indv in pop:
@@ -603,8 +603,8 @@ def flips_max_fitness(pop, gen, outdir):
     return pop
 
 
-def min_flips_fitness(pop, gen, outdir):
-    pop = flips_max_fitness(pop, gen, outdir)
+def min_flips_fitness(pop, gen, outdir, run="local"):
+    pop = flips_max_fitness(pop, gen, outdir, run)
     for i in pop:
         if len(i.pheno) < i.pheno_size:
             i.fitness_components = [-666 for x in i.fitness_components]

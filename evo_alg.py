@@ -161,10 +161,10 @@ def evo_run(runs_params, shared_params, gen):
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, **kwargs):
+         elitism=False, run="local", **kwargs):
     print("Initialising")
     pop = [individual_class() for _ in range(pop_size)]
-    pop = evaluate_outer(evaluate_inner(pop, 0, outdir))
+    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, run))
     gen_times = []
     for gen in range(1, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
@@ -190,7 +190,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
 
                     # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir))
+        pop.extend(evaluate_inner(new_kids, gen, outdir, run))
         pop = evaluate_outer(pop)
 
         # Select
