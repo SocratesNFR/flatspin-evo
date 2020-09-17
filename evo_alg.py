@@ -154,7 +154,7 @@ def evo_run(runs_params, shared_params, gen):
         run_local(dataset)
 
     elif run_type == 'dist':
-        run_dist(dataset)
+        run_dist(dataset, wait=False)
 
     return
 
