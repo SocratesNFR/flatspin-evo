@@ -164,7 +164,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
          elitism=False, run="local", **kwargs):
     print("Initialising")
     pop = [individual_class() for _ in range(pop_size)]
-    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, run))
+    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, run, **kwargs))
     gen_times = []
     for gen in range(1, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
@@ -190,7 +190,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
 
                     # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir, run))
+        pop.extend(evaluate_inner(new_kids, gen, outdir, run,**kwargs))
         pop = evaluate_outer(pop)
 
         # Select

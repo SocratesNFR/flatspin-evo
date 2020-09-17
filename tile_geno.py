@@ -28,7 +28,8 @@ from matplotlib.animation import FuncAnimation, writers
 class Individual:
     _id_counter = count(0)
 
-    def __init__(self, *, max_tiles=1, tile_size=440, mag_w=220, mag_h=80, max_symbol=1, pheno_size=40, age=0,
+    def __init__(self, *, max_tiles=1, tile_size=440, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
+                 pheno_size=40, age=0,
                  tiles=None, **kwargs):
 
         self.id = next(Individual._id_counter)
@@ -39,6 +40,11 @@ class Individual:
         self.age = age
         self.max_symbol = max_symbol
         self.pheno_size = pheno_size
+        if initial_rotation is not None:
+            self.initial_rotation = initial_rotation
+        else:
+            self.initial_rotation = np.random.uniform(0, 2 * np.pi)
+
         if mag_h > mag_w:
             raise Warning("conversion to flatspin assumes magnet height < magnet width!")
         if tiles is not None and 1 <= len(tiles):
@@ -86,8 +92,9 @@ class Individual:
         frames = []
         since_change = 0
         max_len = 0
-        # add magnets in the first tile to the frontier
-        frontier.extend([mag.copy(created=iter_count) for mag in self.tiles[0]])
+        # add origin magnet in the first tile to the frontier
+        frontier.append(self.tiles[0][0].copy(created=iter_count))
+        frontier[0].i_rotate(self.initial_rotation, 'centroid')
         frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
 
         while len(frontier) + len(frozen) < geom_size and len(frontier) > 0 and since_change < no_change_terminator:
@@ -165,6 +172,8 @@ class Individual:
     def mutate(self, strength=5):
         clone = self.copy()
         mut_types = ["magPos", "magAngle", "symbol", "tile"]
+        if self.initial_rotation is not None:
+            mut_types.append("initRot")
         if self.max_tiles == 1:
             mut_types.remove("tile")  # cannot add/remove tiles when max tile is 1
         mut_type = np.random.choice(mut_types)
@@ -225,7 +234,8 @@ class Individual:
                     Tile(mag_w=self.mag_w, mag_h=self.mag_h, tile_size=self.tile_size, max_symbol=self.max_symbol))
             else:
                 raise (Exception("unhandled mutation type"))
-
+        elif mut_type=="initRot":
+            self.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2*np.pi)
         else:
             raise (Exception("unhandled mutation type"))
 
@@ -575,11 +585,13 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     # =============================================================================
 
 
-def flips_max_fitness(pop, gen, outdir, run="local"):
+def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
     if len(pop) < 1:
         return pop
-    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "sin", "H": 0.08, "phi": 30, "radians": True,
+    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.08, "phi": 90, "radians": True,
                      "periods": 10, "use_opencl": False, "basepath": os.path.join(outdir, f"gen{gen}")}
+    if num_angles > 1:
+        shared_params["input"] = [0, 1] * 5
     run_params = []
     for indv in pop:
         run_params.append({"indv_id": indv.id,
@@ -603,8 +615,8 @@ def flips_max_fitness(pop, gen, outdir, run="local"):
     return pop
 
 
-def min_flips_fitness(pop, gen, outdir, run="local"):
-    pop = flips_max_fitness(pop, gen, outdir, run)
+def min_flips_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
+    pop = flips_max_fitness(pop, gen, outdir, run, num_angles=num_angles)
     for i in pop:
         if len(i.pheno) < i.pheno_size:
             i.fitness_components = [-666 for x in i.fitness_components]
