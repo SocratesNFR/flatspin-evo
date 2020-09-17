@@ -85,7 +85,7 @@ def save_stats(outdir, pop):
     out.extend(repr(best))
     out.append("\n")
 
-    with(open(f"{outdir}\\stats.txt", "a+")) as f:
+    with(open(os.path.join(outdir, "stats.txt"), "a+")) as f:
         f.writelines(out)
     return best
 
