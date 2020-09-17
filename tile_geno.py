@@ -585,11 +585,11 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     # =============================================================================
 
 
-def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
+def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, H=0.1, use_cuda=False, **kwargs):
     if len(pop) < 1:
         return pop
-    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.08, "phi": 90, "radians": True,
-                     "periods": 10, "use_opencl": False, "basepath": os.path.join(outdir, f"gen{gen}")}
+    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": H, "phi": 90, "radians": True,
+                     "periods": 10, "use_cuda": use_cuda, "basepath": os.path.join(outdir, f"gen{gen}")}
     if num_angles > 1:
         shared_params["input"] = [0, 1] * 5
     run_params = []
@@ -615,8 +615,8 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
     return pop
 
 
-def min_flips_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
-    pop = flips_max_fitness(pop, gen, outdir, run, num_angles=num_angles)
+def min_flips_fitness(pop, gen, outdir, run="local", **kwargs):
+    pop = flips_max_fitness(pop, gen, outdir, run, **kwargs)
     for i in pop:
         if len(i.pheno) < i.pheno_size:
             i.fitness_components = [-666 for x in i.fitness_components]
