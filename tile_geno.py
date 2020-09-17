@@ -606,7 +606,7 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1,**kwargs):
         ds = queue.pop(0)
         try:  # try to read file, if not there yet add to end of queue
             steps = read_table(ds.tablefile("steps"))
-        except (FileNotFoundError, ValueError):
+        except (FileNotFoundError, ValueError, StopIteration):
             queue.append(ds)
             continue
         id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
