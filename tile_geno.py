@@ -58,8 +58,6 @@ class Individual:
                           range(np.random.randint(1, max_tiles + 1))]
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
 
-
-
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
         self.fitness = None
@@ -67,12 +65,14 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes can be stored and displayed with repr
-        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles","id","fitness","fitness_components")
+        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles",
+                           "initial_rotation", "id", "fitness", "fitness_components")
         return repr({k: v for (k, v) in vars(self).items() if k in repr_attributes})
 
     def copy(self):
         # defines which attributes are used when copying
-        copy_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles")
+        copy_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "initial_rotation",
+                           "fitness", "fitness_components")
         new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k in copy_attributes})
         # copy attributes that are referenced to unlink
         new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
@@ -235,8 +235,8 @@ class Individual:
                     Tile(mag_w=self.mag_w, mag_h=self.mag_h, tile_size=self.tile_size, max_symbol=self.max_symbol))
             else:
                 raise (Exception("unhandled mutation type"))
-        elif mut_type=="initRot":
-            self.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2*np.pi)
+        elif mut_type == "initRot":
+            self.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2 * np.pi)
         else:
             raise (Exception("unhandled mutation type"))
 
@@ -586,20 +586,21 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     # =============================================================================
 
 
-def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1,**kwargs):
+def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
     if len(pop) < 1:
         return pop
-    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90, "radians": True,
-                     "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance":10}
+    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
+                     "radians": True,
+                     "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance": 10}
     shared_params.update(kwargs)
     if num_angles > 1:
         shared_params["input"] = [0, 1] * 5
     run_params = []
-    for indv in [i for i in pop if len(i.pheno)>=i.pheno_size]:
+    for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
         run_params.append({"indv_id": indv.id,
                            "magnet_coords": [mag.pos for mag in indv.pheno],
                            "magnet_angles": [mag.angle for mag in indv.pheno]})
-    if len(run_params)>0:
+    if len(run_params) > 0:
         ea.evo_run(run_params, shared_params, gen)
         id2indv = {individual.id: individual for individual in pop}
 
@@ -612,10 +613,10 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1,**kwargs):
                 queue.append(ds)
                 continue
             id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
-    for indv in [i for i in pop if len(i.pheno)<=i.pheno_size]:
+    for indv in [i for i in pop if len(i.pheno) <= i.pheno_size]:
         indv.fitness_components = [0]
-    #for i in pop:
-     #   print("fit comp :" + str(i.fitness_components))
+    # for i in pop:
+    #   print("fit comp :" + str(i.fitness_components))
     return pop
 
 
@@ -629,8 +630,8 @@ def min_flips_fitness(pop, gen, outdir, run="local", **kwargs):
     return pop
 
 
-def main(outdir=r"results\tileTest", inner=min_flips_fitness,individual_params={}, **kwargs):
-    return ea.main(outdir, Individual, inner, evaluate_outer, individual_params=individual_params,**kwargs)
+def main(outdir=r"results\tileTest", inner=min_flips_fitness, individual_params={}, **kwargs):
+    return ea.main(outdir, Individual, inner, evaluate_outer, individual_params=individual_params, **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -646,4 +647,4 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={})
     parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={})
     args = parser.parse_args()
-    main(outdir=args.output, **eval_params(args.parameter),individual_params=eval_params(args.individual_param))
+    main(outdir=args.output, **eval_params(args.parameter), individual_params=eval_params(args.individual_param))
