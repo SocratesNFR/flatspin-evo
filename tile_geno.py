@@ -595,25 +595,27 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1,**kwargs):
     if num_angles > 1:
         shared_params["input"] = [0, 1] * 5
     run_params = []
-    for indv in pop:
+    for indv in [i for i in pop if len(i.pheno)>=i.pheno_size]:
         run_params.append({"indv_id": indv.id,
                            "magnet_coords": [mag.pos for mag in indv.pheno],
                            "magnet_angles": [mag.angle for mag in indv.pheno]})
-    ea.evo_run(run_params, shared_params, gen)
-    id2indv = {individual.id: individual for individual in pop}
+    if len(run_params)>0:
+        ea.evo_run(run_params, shared_params, gen)
+        id2indv = {individual.id: individual for individual in pop}
 
-    queue = list(Dataset.read(shared_params["basepath"]))
-    while len(queue) > 0:
-        ds = queue.pop(0)
-        try:  # try to read file, if not there yet add to end of queue
-            steps = read_table(ds.tablefile("steps"))
-        except:
-            queue.append(ds)
-            continue
-        id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
-    for i in pop:
-        print("fit comp :")
-        print(i.fitness_components)
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            try:  # try to read file, if not there yet add to end of queue
+                steps = read_table(ds.tablefile("steps"))
+            except:
+                queue.append(ds)
+                continue
+            id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
+    for indv in [i for i in pop if len(i.pheno)<=i.pheno_size]:
+        indv.fitness_components = [0]
+    #for i in pop:
+     #   print("fit comp :" + str(i.fitness_components))
     return pop
 
 
