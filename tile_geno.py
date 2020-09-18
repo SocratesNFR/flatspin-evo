@@ -29,10 +29,9 @@ class Individual:
     _id_counter = count(0)
 
     def __init__(self, *, max_tiles=1, tile_size=440, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
-                 pheno_size=40, age=0,
-                 tiles=None, **kwargs):
+                 pheno_size=40, age=0, id=None, fitness=None, fitness_components=None, tiles=None, **kwargs):
 
-        self.id = next(Individual._id_counter)
+        self.id = id if id is not None else next(Individual._id_counter)
         self.max_tiles = max_tiles
         self.tile_size = tile_size
         self.mag_w = mag_w
@@ -40,6 +39,9 @@ class Individual:
         self.age = age
         self.max_symbol = max_symbol
         self.pheno_size = pheno_size
+
+        self.fitness = fitness
+        self.fitness_components = fitness_components
         if initial_rotation is not None:
             self.initial_rotation = initial_rotation
         else:
@@ -56,8 +58,7 @@ class Individual:
                           range(np.random.randint(1, max_tiles + 1))]
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
 
-        self.fitness = None
-        self.fitness_components = None
+
 
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
@@ -66,7 +67,7 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes can be stored and displayed with repr
-        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles")
+        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles","id","fitness","fitness_components")
         return repr({k: v for (k, v) in vars(self).items() if k in repr_attributes})
 
     def copy(self):
