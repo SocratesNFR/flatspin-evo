@@ -161,9 +161,9 @@ def evo_run(runs_params, shared_params, gen):
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, run="local", **kwargs):
+         elitism=False, run="local",individual_params={} , **kwargs):
     print("Initialising")
-    pop = [individual_class() for _ in range(pop_size)]
+    pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_outer(evaluate_inner(pop, 0, outdir, run, **kwargs))
     gen_times = []
     for gen in range(1, generation_num + 1):

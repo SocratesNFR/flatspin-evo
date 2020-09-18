@@ -627,8 +627,8 @@ def min_flips_fitness(pop, gen, outdir, run="local", **kwargs):
     return pop
 
 
-def main(outdir=r"results\tileTest", inner=min_flips_fitness, **kwargs):
-    return ea.main(outdir, Individual, inner, evaluate_outer, **kwargs)
+def main(outdir=r"results\tileTest", inner=min_flips_fitness,individual_params={}, **kwargs):
+    return ea.main(outdir, Individual, inner, evaluate_outer, individual_params=individual_params,**kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -642,5 +642,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', metavar='FILE',
                         help=r'¯\_(ツ)_/¯')
     parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={})
+    parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={})
     args = parser.parse_args()
-    main(outdir=args.output, **eval_params(args.parameter))
+    main(outdir=args.output, **eval_params(args.parameter),individual_params=eval_params(args.individual_param))
