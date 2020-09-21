@@ -613,7 +613,7 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
                 queue.append(ds)
                 continue
             id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
-    for indv in [i for i in pop if len(i.pheno) <= i.pheno_size]:
+    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
         indv.fitness_components = [0]
     # for i in pop:
     #   print("fit comp :" + str(i.fitness_components))
