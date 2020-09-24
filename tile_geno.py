@@ -236,7 +236,7 @@ class Individual:
             else:
                 raise (Exception("unhandled mutation type"))
         elif mut_type == "initRot":
-            self.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2 * np.pi)
+            clone.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2 * np.pi)
         else:
             raise (Exception("unhandled mutation type"))
 
@@ -590,8 +590,8 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
     if len(pop) < 1:
         return pop
     shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
-                     "radians": True,
-                     "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance": 10}
+                     "radians": True, "alpha": 3027.2 * 300, "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3,
+                     "hc": 0.0, "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance": 10}
     shared_params.update(kwargs)
     if num_angles > 1:
         shared_params["input"] = [0, 1] * 5
