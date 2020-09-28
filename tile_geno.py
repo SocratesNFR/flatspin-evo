@@ -590,7 +590,7 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
     if len(pop) < 1:
         return pop
     shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
-                     "radians": True, "alpha": 30272 , "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3,
+                     "radians": True, "alpha": 30272 , "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3, "spp":100,
                      "hc": 0.03, "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance": 1000}
     shared_params.update(kwargs)
     if num_angles > 1:
@@ -607,12 +607,13 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
         queue = list(Dataset.read(shared_params["basepath"]))
         while len(queue) > 0:
             ds = queue.pop(0)
-            try:  # try to read file, if not there yet add to end of queue
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"])):
+                queue.append(ds) #if file not exist yet add it to the end and check next
+            else:
                 steps = read_table(ds.tablefile("steps"))
-            except:
-                queue.append(ds)
-                continue
-            id2indv[ds.index["indv_id"].values[0]].fitness_components = [steps["steps"].iloc[-1], ]
+                #fitness is number of steps, but ignores steps from first fifth of the run
+                fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"]*shared_params["periods"])//5]["steps"]
+                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn,]
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
         indv.fitness_components = [0]
     # for i in pop:
