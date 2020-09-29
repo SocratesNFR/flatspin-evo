@@ -22,9 +22,13 @@ def rainbow_colours(num):
     return cmap(np.linspace(0, 1, num))
 
 
-def roulette_select(pop, pop_size, elitism=False):
+def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
     fits = np.fromiter(map(lambda p: p.fitness, pop), count=len(pop), dtype=np.float64)
-    #print(fits)
+    no_inf = fits[np.isfinite(fits)]
+    np.nan_to_num(fits, copy=False,nan=(no_inf.max() if minimize_fit else no_inf.min()), posinf=no_inf.max(), neginf=no_inf.min())
+    if minimize_fit:
+        fits = -1 * fits
+
     if elitism:
         best_index = np.argmax(fits)
         best = pop.pop(best_index)  # remove best to be added in at end
@@ -46,9 +50,11 @@ def roulette_select(pop, pop_size, elitism=False):
     return new_pop
 
 
-def fittest_select(pop, pop_size):
+def fittest_select(pop, pop_size, minimize_fit):
     fits = np.fromiter(map(lambda p: p.fitness, pop), count=len(pop), dtype=np.float64)
     assert not np.isnan(fits).any()
+    if minimize_fit:
+        fits = -1*fits
     best_indicies = np.argpartition(fits, -pop_size)[-pop_size:]
 
     return [pop[i] for i in best_indicies]
@@ -159,12 +165,12 @@ def evo_run(runs_params, shared_params, gen):
     return
 
 
-def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
+def main(outdir, individual_class, evaluate_inner, evaluate_outer,minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, run="local",individual_params={} , **kwargs):
+         elitism=False, individual_params={} , **kwargs):
     print("Initialising")
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, run, **kwargs))
+    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs))
     gen_times = []
     for gen in range(1, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
@@ -190,12 +196,12 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, *,
 
                     # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir, run,**kwargs))
+        pop.extend(evaluate_inner(new_kids, gen, outdir, **kwargs))
         pop = evaluate_outer(pop)
 
         # Select
         print("    Select")
-        pop = roulette_select(pop, pop_size, elitism)
+        pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
         assert len(pop) == pop_size
 

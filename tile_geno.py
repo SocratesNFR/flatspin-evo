@@ -128,8 +128,8 @@ class Individual:
         return centre_magnets(frozen + frontier)[:geom_size]
 
     @staticmethod
-    def frames2animation(frames, interval=400, title=False):
-        fig, ax = plt.subplots()
+    def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6)):
+        fig, ax = plt.subplots(figsize=figsize)
         ax.set_aspect("equal")
         bounds = np.vstack(list(map(lambda m: m.xy, [mag for frame in frames for mag in frame])))
         xlim = bounds[:, 0].min(), bounds[:, 0].max()
@@ -146,20 +146,26 @@ class Individual:
 
             fig.canvas.draw()
 
-        colours = ea.rainbow_colours(len(frames))
-        for frame in frames:
-            for poly in frame:
-                poly.set_color(colours[poly.iterCreated % len(colours)])
-        ax.set_facecolor('k')
+        if not color_unchanged:
+            colours = ea.rainbow_colours(len(frames))
+            for frame in frames:
+                for poly in frame:
+                    poly.set_color(colours[poly.iterCreated % len(colours)])
+        ax.set_facecolor(ax_color)
         return FuncAnimation(fig, step, frames=len(frames),
                              fargs=(len(frames) - 1, xlim, ylim, title),
                              blit=False, interval=interval)
 
     @staticmethod
-    def print_mags(mags):
+    def print_mags(mags, facecolor=None, edgecolor=None):
         plt.figure()
         for mag in mags:
-            plt.gca().add_patch(mag.as_patch())
+            patch = mag.as_patch()
+            if facecolor:
+                patch.set_facecolor(facecolor)
+            if edgecolor:
+                patch.set_edgecolor(edgecolor)
+            plt.gca().add_patch(patch)
             plt.gca().set_aspect(1)
             plt.autoscale()
 
@@ -286,9 +292,14 @@ class Individual:
         child.refresh()
         return child
 
-    def plot(self):
+    def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
-            plt.gca().add_patch(mag.as_patch())
+            patch = mag.as_patch()
+            if facecolor:
+                patch.set_facecolor(facecolor)
+            if edgecolor:
+                patch.set_edgecolor(edgecolor)
+            plt.gca().add_patch(patch)
         plt.gca().set_aspect(1)
         plt.autoscale()
 
@@ -487,89 +498,6 @@ class Magnet:
         return Magnet(**v)
 
 
-# ===================  FITNESS EVAL ========================
-# def evaluateInner(inner_pop):
-#    target = makeSquareAsi(220,80,5,4,4,5,370)
-#    for indv in inner_pop:
-#        indv.fitness_components = similarityMeasure(indv, target,aggregate=False)
-#    
-#    return inner_pop
-def evaluate_inner(inner_pop):
-    for indv in inner_pop:
-        indv.fitness_components = [-regularity_measure(indv)]  # / len(indv.pheno)]
-
-    return inner_pop
-
-
-def evaluate_outer(outer_pop, global_best=None, global_worst=None, max_age=0):
-    for i in outer_pop:
-        i.fitness = np.sum(i.fitness_components)
-    return outer_pop
-
-
-def scale_to_unit(x, upper, lower):
-    return (x - lower) / (upper - lower)
-
-
-def regularity_measure(indv, target_distance="even", target_angle=np.pi / 2, num_neighbors=4, remove_edge_effect=0.5):
-    """
-    target distance: either 'even' a float/int or a len 2 list/tuple
-    target angle: should be modulo np.pi
-    """
-    if len(indv.pheno) < num_neighbors or len(indv.pheno) < indv.pheno_size:
-        return 99999999999999
-    angle_badness = []
-    pos_badness = []
-    mag_poss = [mag.pos for mag in indv.pheno]
-    mag_angles = [mag.angle for mag in indv.pheno]
-
-    tree = KDTree(mag_poss)
-
-    if type(target_distance) not in [list, tuple, str]:
-        target_distance = (target_distance,) * 2
-
-    for i in range(len(indv.pheno)):
-        _, neighbors = tree.query(mag_poss[i], num_neighbors)
-        angle_badness.append(sum([abs(abs(mag_angles[i] % np.pi - mag_angles[n] % np.pi) % np.pi - target_angle)
-                                  for n in neighbors]))
-        if type(target_distance) is str and target_distance == 'even':
-            target_distance = np.mean([np.abs(np.subtract(mag_poss[i], mag_poss[n]))
-                                       for n in neighbors], 0)
-
-        pos_badness.append(np.sum([np.abs(np.subtract(np.abs(np.subtract(mag_poss[i], mag_poss[n])), target_distance))
-                                   for n in neighbors]))
-    angle_badness = np.sort(angle_badness)[:int(len(angle_badness) * remove_edge_effect)].sum()
-    pos_badness = np.sort(pos_badness)[:int(len(pos_badness) * remove_edge_effect)].sum()
-    return angle_badness  # + posBadness
-
-
-def make_square_asi(mag_h, mag_w, n_h_rows, n_h_cols, n_v_rows, n_v_cols,
-                    lattice_space, centre=(0, 0)):
-    # returns [horiz, vert] = [[[x1,y1,w1,h1],[x2,y2,w2,h2],...],[[x1,y1,w1,h1],[x2,y2,w2,h2],...]]
-
-    # horiz mask
-    h_mask = []
-    for row in range(n_h_rows):
-        for col in range(n_h_cols):
-            x = (col + 0.5) * lattice_space
-            y = (row + 0.5) * lattice_space
-
-            h_mask.append(Magnet(None, np.array([x, y], dtype=np.float64), angle=np.pi / 2, mag_h=mag_h, mag_w=mag_w))
-
-    # vert mask
-    v_mask = []
-    for row in range(n_v_rows):
-        for col in range(n_v_cols):
-            x = col * lattice_space
-            y = (row + 1) * lattice_space
-
-            v_mask.append(Magnet(None, np.array([x, y], dtype=np.float64), angle=0, mag_h=mag_h, mag_w=mag_w))
-    mask = h_mask + v_mask
-    if centre is not None:  # translate array to be centred on centre
-        mask = centre_magnets(mask, centre)
-    return mask
-
-
 def centre_magnets(magnets, centre_point=(0, 0)):
     """modifies inplace, but also returns magnets"""
     centres = np.array(list(map(lambda mag: mag.pos, magnets)))
@@ -583,23 +511,48 @@ def centre_magnets(magnets, centre_point=(0, 0)):
         mag.as_polygon, mag.bound = mag.init_polygon()  # need to remake the polys with new pos
     return magnets
 
-    # =============================================================================
+
+# ===================  FITNESS EVAL ========================
+def evaluate_outer(outer_pop, max_age=0):
+    for i in outer_pop:
+        i.fitness = np.sum(i.fitness_components)
+    return outer_pop
 
 
-def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
-    if len(pop) < 1:
-        return pop
-    shared_params = {"run": run, "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
-                     "radians": True, "alpha": 30272 , "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3, "spp":100,
-                     "hc": 0.03, "periods": 10, "basepath": os.path.join(outdir, f"gen{gen}"), "neighbor_distance": 1000}
-    shared_params.update(kwargs)
-    if num_angles > 1:
-        shared_params["input"] = [0, 1] * 5
+def scale_to_unit(x, upper, lower):
+    return (x - lower) / (upper - lower)
+
+
+def get_default_shared_params(outdir="", gen=None):
+    default_params = {"run": "local", "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
+                      "radians": True, "alpha": 30272, "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3, "spp": 100,
+                      "hc": 0.03, "periods": 10, "neighbor_distance": 1000}
+    if gen is not None:
+        outdir = os.path.join(outdir, f"gen{gen}")
+    default_params["basepath"] = outdir
+
+    return default_params
+
+
+def get_default_run_params(pop):
     run_params = []
     for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
         run_params.append({"indv_id": indv.id,
                            "magnet_coords": [mag.pos for mag in indv.pheno],
                            "magnet_angles": [mag.angle for mag in indv.pheno]})
+    return run_params
+
+
+def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
+    if len(pop) < 1:
+        return pop
+    shared_params = get_default_shared_params(outdir, gen)
+    shared_params.update(kwargs)
+
+    if num_angles > 1:
+        shared_params["input"] = [0, 1] * shared_params["period"] // 2
+
+    run_params = get_default_run_params()
     if len(run_params) > 0:
         ea.evo_run(run_params, shared_params, gen)
         id2indv = {individual.id: individual for individual in pop}
@@ -608,31 +561,55 @@ def flips_max_fitness(pop, gen, outdir, run="local", num_angles=1, **kwargs):
         while len(queue) > 0:
             ds = queue.pop(0)
             if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"])):
-                queue.append(ds) #if file not exist yet add it to the end and check next
+                queue.append(ds)  # if file not exist yet add it to the end and check next
             else:
                 steps = read_table(ds.tablefile("steps"))
-                #fitness is number of steps, but ignores steps from first fifth of the run
-                fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"]*shared_params["periods"])//5]["steps"]
-                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn,]
+                # fitness is number of steps, but ignores steps from first fifth of the run
+                fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
+                    "steps"]
+                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
-        indv.fitness_components = [0]
+        indv.fitness_components = [np.nan]
     # for i in pop:
     #   print("fit comp :" + str(i.fitness_components))
     return pop
 
 
-def min_flips_fitness(pop, gen, outdir, run="local", **kwargs):
-    pop = flips_max_fitness(pop, gen, outdir, run, **kwargs)
-    for i in pop:
-        if len(i.pheno) < i.pheno_size:
-            i.fitness_components = [-666 for x in i.fitness_components]
-        else:
-            i.fitness_components = [-x for x in i.fitness_components]
+def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs):
+    if len(pop) < 1:
+        return pop
+    shared_params = get_default_shared_params(outdir, gen)
+    shared_params.update(kwargs)
+    run_params = get_default_run_params(pop)
+    if state_step is None:
+        state_step = shared_params["spp"]
+    if len(run_params) > 0:
+        ea.evo_run(run_params, shared_params, gen)
+        id2indv = {individual.id: individual for individual in pop}
+
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                queue.append(ds)  # if file not exist yet add it to the end and check next
+            else:
+                spin = read_table(ds.tablefile("spin"))
+                fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
+                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
+        indv.fitness_components = [np.nan]
     return pop
 
 
-def main(outdir=r"results\tileTest", inner=min_flips_fitness, individual_params={}, **kwargs):
-    return ea.main(outdir, Individual, inner, evaluate_outer, individual_params=individual_params, **kwargs)
+def main(outdir=r"results\tileTest", inner=target_state_num_fitness, individual_params={}, minimize_fitness=True,
+         **kwargs):
+
+    known_fits = {"target_state_num_fitness": target_state_num_fitness, "flips_fitness": flips_fitness}
+    if inner in known_fits:
+        inner = known_fits[inner]
+
+    return ea.main(outdir, Individual, inner, evaluate_outer, minimize_fitness, individual_params=individual_params,
+                   **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
