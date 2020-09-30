@@ -41,11 +41,16 @@ def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
     if elitism:
         best_index = np.argmax(fits)
         best = pop.pop(best_index)  # remove best to be added in at end
+        if pop_size == 1:
+            return [best]
         fits = np.delete(fits, best_index)
-    assert not np.isnan(fits).any()
-    fits = zscore(fits)
+
+    zs = zscore(fits)
+    fits = zs if not np.isnan(zs).any() else fits
     fits += np.abs(np.min(fits)) + 1
-    fits = fits / np.sum(fits)
+    summ = np.sum(fits)
+    fits = fits / summ if summ != 0 else fits
+    assert not np.isnan(fits).any()
 
     # print(fits)
     if elitism:
@@ -96,19 +101,24 @@ def parse_file(filename):
 def save_stats(outdir, pop, minimize_fitness):
     fits = np.array(list(map(lambda indv: indv.fitness, pop)))
     fits = fits[np.isfinite(fits)]
-    out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}", "\nBest indv in current pop:\n"]
-
-    try:  # save fitness components if they exist
-        fit_comps = list(map(lambda indv: indv.fitness_components, pop))
-        out[
-            0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
-    except AttributeError:
-        pass
+    if len(fits) > 0:
+        out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}", "\nBest indv in current pop:\n"]
+    else:
+        out = [f"mean: {np.nan}; max: {np.nan}; min: {np.nan}",
+               "\nBest indv in current pop:\n"]
+    if len(fits) > 0:
+        try:  # save fitness components if they exist
+            fit_comps = list(map(lambda indv: indv.fitness_components, pop))
+            out[
+                0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
+        except AttributeError:
+            pass
 
     best = min(pop, key=lambda indv: indv.fitness) if minimize_fitness else max(pop, key=lambda indv: indv.fitness)
     out.extend(repr(best))
     out.append("\n")
-
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
     with(open(os.path.join(outdir, "stats.txt"), "a+")) as f:
         f.writelines(out)
     return best

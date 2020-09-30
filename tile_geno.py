@@ -563,11 +563,14 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
             if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"])):
                 queue.append(ds)  # if file not exist yet add it to the end and check next
             else:
-                steps = read_table(ds.tablefile("steps"))
-                # fitness is number of steps, but ignores steps from first fifth of the run
-                fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
-                    "steps"]
-                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                try:
+                    steps = read_table(ds.tablefile("steps"))
+                    # fitness is number of steps, but ignores steps from first fifth of the run
+                    fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
+                        "steps"]
+                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                except: #not done saving file
+                    queue.append(ds)
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
         indv.fitness_components = [np.nan]
     # for i in pop:
@@ -597,7 +600,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
                     spin = read_table(ds.tablefile("spin"))
                     fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
                     id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except(ValueError, StopIteration, AttributeError): #not done saving file
+                except: #not done saving file
                     queue.append(ds)
 
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
