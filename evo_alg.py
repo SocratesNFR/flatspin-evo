@@ -235,8 +235,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         assert len(pop) == pop_size
 
         best = save_stats(outdir, pop, minimize_fitness)
-        if (minimize_fitness and best.fitness <= stop_at_fitness) or (
-                ~minimize_fitness and best.fitness >= stop_at_fitness):
+        if stop_at_fitness is not None and (
+                (minimize_fitness and best.fitness <= stop_at_fitness) or
+                (~minimize_fitness and best.fitness >= stop_at_fitness)):
             print("Halting early, fitness achieved")
             return best
         gen_times.append((datetime.now() - time).total_seconds())
