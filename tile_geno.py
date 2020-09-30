@@ -597,7 +597,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
                     spin = read_table(ds.tablefile("spin"))
                     fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
                     id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except ValueError: #not done saving file
+                except(ValueError, StopIteration, AttributeError): #not done saving file
                     queue.append(ds)
 
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
