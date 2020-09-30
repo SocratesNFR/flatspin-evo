@@ -24,8 +24,17 @@ def rainbow_colours(num):
 
 def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
     fits = np.fromiter(map(lambda p: p.fitness, pop), count=len(pop), dtype=np.float64)
-    no_inf = fits[np.isfinite(fits)]
-    np.nan_to_num(fits, copy=False,nan=(no_inf.max() if minimize_fit else no_inf.min()), posinf=no_inf.max(), neginf=no_inf.min())
+
+    is_finite = np.isfinite(fits)
+    fits = fits[is_finite]
+    nan_pop = [pop[i] for i in np.arange(len(pop))[~is_finite]]
+    pop = [pop[i] for i in np.arange(len(pop))[is_finite]]
+
+    if len(pop) < pop_size:
+        # if not enough to select from: return all indvs with none nan fitness and select remainder randomly
+        pop += list(np.random.choice(nan_pop, pop_size - len(pop), replace=False))
+        return pop
+
     if minimize_fit:
         fits = -1 * fits
 
@@ -35,29 +44,36 @@ def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
         fits = np.delete(fits, best_index)
     assert not np.isnan(fits).any()
     fits = zscore(fits)
-    if np.isnan(fits).any():
-        fits = None
-    else:
-        fits += np.abs(np.min(fits)) + 1
-        fits = fits / np.sum(fits)
-        assert not np.isnan(fits).any()
-    #print(fits)
+    fits += np.abs(np.min(fits)) + 1
+    fits = fits / np.sum(fits)
+
+    # print(fits)
     if elitism:
-        new_pop = list(np.random.choice(pop, pop_size - 1, False, p=fits)) + [best]
+        new_pop = list(np.random.choice(pop, pop_size - 1, replace=False, p=fits)) + [best]
     else:
-        new_pop = list(np.random.choice(pop, pop_size, False, p=fits))
+        new_pop = list(np.random.choice(pop, pop_size, replace=False, p=fits))
 
     return new_pop
 
 
 def fittest_select(pop, pop_size, minimize_fit):
     fits = np.fromiter(map(lambda p: p.fitness, pop), count=len(pop), dtype=np.float64)
-    assert not np.isnan(fits).any()
-    if minimize_fit:
-        fits = -1*fits
-    best_indicies = np.argpartition(fits, -pop_size)[-pop_size:]
 
-    return [pop[i] for i in best_indicies]
+    is_finite = np.isfinite(fits)
+    fits = fits[is_finite]
+    nan_pop = [pop[i] for i in np.arange(len(pop))[~is_finite]]
+    pop = [pop[i] for i in np.arange(len(pop))[is_finite]]
+    if len(pop) < pop_size:
+        # if not enough to select from: return all indvs with none nan fitness and select remainder randomly
+        pop += list(np.random.choice(nan_pop, pop_size - len(pop), replace=False))
+        return pop
+
+    if minimize_fit:
+        fits = -1 * fits
+    best_indices = np.argpartition(fits, -pop_size)[-pop_size:]
+    new_pop = [pop[i] for i in best_indices]
+
+    return new_pop
 
 
 def parse_file(filename):
@@ -77,17 +93,19 @@ def parse_file(filename):
     return results
 
 
-def save_stats(outdir, pop):
-    fits = list(map(lambda indv: indv.fitness, pop))
-    out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}", "\nBest indv in current pop:\n"]
+def save_stats(outdir, pop, minimize_fitness):
+    fits = np.array(list(map(lambda indv: indv.fitness, pop)))
+    fits = fits[np.isfinite(fits)]
+    out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}", "\nBest indv in current pop:\n"]
 
     try:  # save fitness components if they exist
         fit_comps = list(map(lambda indv: indv.fitness_components, pop))
-        out[0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}"
+        out[
+            0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
     except AttributeError:
         pass
 
-    best = max(pop, key=lambda indv: indv.fitness)
+    best = min(pop, key=lambda indv: indv.fitness) if minimize_fitness else max(pop, key=lambda indv: indv.fitness)
     out.extend(repr(best))
     out.append("\n")
 
@@ -165,9 +183,9 @@ def evo_run(runs_params, shared_params, gen):
     return
 
 
-def main(outdir, individual_class, evaluate_inner, evaluate_outer,minimize_fitness=True, *,
+def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, individual_params={} , **kwargs):
+         elitism=False, individual_params={}, **kwargs):
     print("Initialising")
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs))
@@ -205,7 +223,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer,minimize_fitne
         # pop = fittestSelect(pop, popSize)
         assert len(pop) == pop_size
 
-        best = save_stats(outdir, pop)
+        best = save_stats(outdir, pop, minimize_fitness)
         gen_times.append((datetime.now() - time).total_seconds())
-    #best.plot()
+    # best.plot()
     return best
