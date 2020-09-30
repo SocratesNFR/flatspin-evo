@@ -102,7 +102,8 @@ def save_stats(outdir, pop, minimize_fitness):
     fits = np.array(list(map(lambda indv: indv.fitness, pop)))
     fits = fits[np.isfinite(fits)]
     if len(fits) > 0:
-        out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}", "\nBest indv in current pop:\n"]
+        out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}",
+               "\nBest indv in current pop:\n"]
     else:
         out = [f"mean: {np.nan}; max: {np.nan}; min: {np.nan}",
                "\nBest indv in current pop:\n"]
@@ -195,7 +196,7 @@ def evo_run(runs_params, shared_params, gen):
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, individual_params={}, **kwargs):
+         elitism=False, individual_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs))
@@ -234,6 +235,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         assert len(pop) == pop_size
 
         best = save_stats(outdir, pop, minimize_fitness)
+        if (minimize_fitness and best.fitness <= stop_at_fitness) or (
+                ~minimize_fitness and best.fitness >= stop_at_fitness):
+            print("Halting early, fitness achieved")
+            return best
         gen_times.append((datetime.now() - time).total_seconds())
     # best.plot()
     return best
