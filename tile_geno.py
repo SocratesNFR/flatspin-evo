@@ -593,9 +593,13 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
             if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
                 queue.append(ds)  # if file not exist yet add it to the end and check next
             else:
-                spin = read_table(ds.tablefile("spin"))
-                fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
-                id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                try:
+                    spin = read_table(ds.tablefile("spin"))
+                    fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
+                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                except ValueError: #not done saving file
+                    queue.append(ds)
+
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
         indv.fitness_components = [np.nan]
     return pop
