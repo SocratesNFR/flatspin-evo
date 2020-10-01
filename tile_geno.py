@@ -614,7 +614,7 @@ def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8)
     shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(kwargs)
 
-    shared_params["phi"] = np.pi * 2
+    shared_params["phi"] = 360
     shared_params["input"] = (angles % (2 * np.pi)) / (2 * np.pi)
     t = parse_time(f"::{shared_params['spp']}")
     if np.isscalar(grid_size):
