@@ -12,8 +12,8 @@ from scipy.spatial.distance import cdist
 from scipy.spatial import KDTree
 import evo_alg as ea
 
-from flatspin.data import Dataset, read_table
-
+from flatspin.data import Dataset, read_table, load_output
+from flatspin.cmdline import parse_time
 import os
 import pandas as pd
 # to make animation work in pycharm
@@ -569,7 +569,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
                     fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
                         "steps"]
                     id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except: #not done saving file
+                except:  # not done saving file
                     queue.append(ds)
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
         indv.fitness_components = [np.nan]
@@ -600,7 +600,44 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
                     spin = read_table(ds.tablefile("spin"))
                     fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
                     id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except: #not done saving file
+                except:  # not done saving file
+                    queue.append(ds)
+
+    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
+        indv.fitness_components = [np.nan]
+    return pop
+
+
+def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **kwargs):
+    if len(pop) < 1:
+        return pop
+    shared_params = get_default_shared_params(outdir, gen)
+    shared_params.update(kwargs)
+
+    shared_params["phi"] = np.pi * 2
+    shared_params["input"] = (angles % (2 * np.pi)) / (2 * np.pi)
+    t = parse_time(f"::{shared_params['spp']}")
+    if np.isscalar(grid_size):
+        grid_size = (grid_size, grid_size)
+
+    run_params = get_default_run_params(pop)
+    if len(run_params) > 0:
+        ea.evo_run(run_params, shared_params, gen)
+        id2indv = {individual.id: individual for individual in pop}
+
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                queue.append(ds)  # if file not exist yet add it to the end and check next
+            else:
+                try:
+                    mag = load_output(ds, "mag", t=t, grid_size=grid_size, flatten=False)
+                    magnitude = np.linalg.norm(mag, axis=3)
+                    summ = np.sum(magnitude, axis=0)
+                    fitn = np.std(summ)
+                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                except:  # not done saving file
                     queue.append(ds)
 
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
@@ -610,8 +647,8 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
 
 def main(outdir=r"results\tileTest", inner=target_state_num_fitness, individual_params={}, minimize_fitness=True,
          **kwargs):
-
-    known_fits = {"target_state_num_fitness": target_state_num_fitness, "flips_fitness": flips_fitness}
+    known_fits = {"target_state_num_fitness": target_state_num_fitness, "flips_fitness": flips_fitness,
+                  "std_grid_field_fitness":std_grid_field_fitness}
     if inner in known_fits:
         inner = known_fits[inner]
 
