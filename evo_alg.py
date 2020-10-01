@@ -101,6 +101,7 @@ def parse_file(filename):
 def save_stats(outdir, pop, minimize_fitness):
     fits = np.array(list(map(lambda indv: indv.fitness, pop)))
     fits = fits[np.isfinite(fits)]
+    finite_pop = [pop[i] for i in np.where(np.isfinite(fits))[0]]
     if len(fits) > 0:
         out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}",
                "\nBest indv in current pop:\n"]
@@ -114,8 +115,10 @@ def save_stats(outdir, pop, minimize_fitness):
                 0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
         except AttributeError:
             pass
-
-    best = min(pop, key=lambda indv: indv.fitness) if minimize_fitness else max(pop, key=lambda indv: indv.fitness)
+    if len(finite_pop)>0:
+        best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(finite_pop, key=lambda indv: indv.fitness)
+    else:
+        best = pop[0]
     out.extend(repr(best))
     out.append("\n")
     if not os.path.isdir(outdir):
@@ -235,10 +238,13 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         assert len(pop) == pop_size
 
         best = save_stats(outdir, pop, minimize_fitness)
-        if stop_at_fitness is not None and (
+        if stop_at_fitness is not None and np.isfinite(best.fitness) and (
                 (minimize_fitness and best.fitness <= stop_at_fitness) or
-                (~minimize_fitness and best.fitness >= stop_at_fitness)):
-            print("Halting early, fitness achieved")
+                ((not minimize_fitness) and best.fitness >= stop_at_fitness)
+        ):
+            print(f"Halting early, fitness {best.fitness} achieved")
+            print(stop_at_fitness is not None,minimize_fitness and best.fitness <= stop_at_fitness,
+                  (not minimize_fitness) and best.fitness >= stop_at_fitness)
             return best
         gen_times.append((datetime.now() - time).total_seconds())
     # best.plot()
