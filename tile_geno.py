@@ -674,7 +674,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
                 sleep(1)
             else:
                 try:
-                    mag, grid = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False, return_grid=True)
+                    mag = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False)
                 except:  # not done saving file
                     queue.append(ds)
                     sleep(1)
