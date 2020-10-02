@@ -635,7 +635,7 @@ def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8)
                     mag = load_output(ds, "mag", t=t, grid_size=grid_size, flatten=False)
                     magnitude = np.linalg.norm(mag, axis=3)
                     summ = np.sum(magnitude, axis=0)
-                    fitn = np.std(summ)
+                    fitn = np.std(summ) * np.mean(summ)
                     id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
                 except:  # not done saving file
                     queue.append(ds)
