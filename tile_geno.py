@@ -675,16 +675,16 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
             else:
                 try:
                     mag, grid = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False, return_grid=True)
-                    magnitude = np.linalg.norm(mag, axis=3)[0]
-                    indv = id2indv[ds.index["indv_id"].values[0]]
-
-                    cells_with_mags = [magnitude[x][y] for x, y in np.unique(indv.grid._grid_index, axis=0)]
-                    fitn = np.std(cells_with_mags)
-                    indv.fitness_components = [fitn, ]
                 except:  # not done saving file
                     queue.append(ds)
                     sleep(1)
 
+                magnitude = np.linalg.norm(mag, axis=3)[0]
+                indv = id2indv[ds.index["indv_id"].values[0]]
+                cells_with_mags = [magnitude[x][y] for x, y in np.unique(indv.grid._grid_index, axis=0)]
+                fitn = np.std(cells_with_mags)
+                indv.fitness_components = [fitn, ]
+                
     for indv in [i for i in pop if not condition(i)]:
         indv.fitness_components = [np.nan]
     return pop
