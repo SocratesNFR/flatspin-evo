@@ -6,13 +6,14 @@ from shapely.prepared import prep
 from itertools import count
 from copy import deepcopy
 from collections import Sequence
-
+from time import sleep
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from scipy.spatial import KDTree
 import evo_alg as ea
 
 from flatspin.data import Dataset, read_table, load_output
+from flatspin.grid import Grid
 from flatspin.cmdline import parse_time
 import os
 import pandas as pd
@@ -534,9 +535,9 @@ def get_default_shared_params(outdir="", gen=None):
     return default_params
 
 
-def get_default_run_params(pop):
+def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size):
     run_params = []
-    for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
+    for indv in [i for i in pop if condition(i)]:
         run_params.append({"indv_id": indv.id,
                            "magnet_coords": [mag.pos for mag in indv.pheno],
                            "magnet_angles": [mag.angle for mag in indv.pheno]})
@@ -645,10 +646,54 @@ def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8)
     return pop
 
 
+def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
+    if len(pop) < 1:
+        return pop
+    shared_params = get_default_shared_params(outdir, gen)
+    shared_params.update(kwargs)
+    shared_params["encoder"] = "rotate"
+    shared_params["input"] = np.linspace(1, 0, shared_params["periods"])
+    if np.isscalar(grid_size):
+        grid_size = (grid_size, grid_size)
+
+    for i in pop:
+        i.grid = Grid.fixed_grid(np.array([mag.pos for mag in i.pheno]), grid_size)
+
+    # check there are magnets in at least half of grid
+    condition = lambda i: len(np.unique(i.grid._grid_index,axis=0)) >= 0.5 * grid_size[0] * grid_size[1]
+    run_params = get_default_run_params(pop, condition)
+    if len(run_params) > 0:
+        ea.evo_run(run_params, shared_params, gen)
+        id2indv = {individual.id: individual for individual in pop}
+
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                queue.append(ds)  # if file not exist yet add it to the end and check next
+                sleep(1)
+            else:
+                try:
+                    mag, grid = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False, return_grid=True)
+                    magnitude = np.linalg.norm(mag, axis=3)[0]
+                    indv = id2indv[ds.index["indv_id"].values[0]]
+
+                    cells_with_mags = [magnitude[x][y] for x, y in np.unique(indv.grid._grid_index, axis=0)]
+                    fitn = np.std(cells_with_mags)
+                    indv.fitness_components = [fitn, ]
+                except:  # not done saving file
+                    queue.append(ds)
+                    sleep(1)
+
+    for indv in [i for i in pop if not condition(i)]:
+        indv.fitness_components = [np.nan]
+    return pop
+
+
 def main(outdir=r"results\tileTest", inner=target_state_num_fitness, individual_params={}, minimize_fitness=True,
          **kwargs):
-    known_fits = {"target_state_num_fitness": target_state_num_fitness, "flips_fitness": flips_fitness,
-                  "std_grid_field_fitness":std_grid_field_fitness}
+    known_fits = {"target_state_num": target_state_num_fitness, "flips": flips_fitness,
+                  "std_grid_field": std_grid_field_fitness, "target_order_percent": target_order_percent_fitness}
     if inner in known_fits:
         inner = known_fits[inner]
 
