@@ -660,7 +660,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
         i.grid = Grid.fixed_grid(np.array([mag.pos for mag in i.pheno]), grid_size)
 
     # check there are magnets in at least half of grid
-    condition = lambda i: len(np.unique(i.grid._grid_index,axis=0)) >= 0.5 * grid_size[0] * grid_size[1]
+    condition = lambda i: (len(np.unique(i.grid._grid_index,axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and len(i.pheno) >= i.pheno_size
     run_params = get_default_run_params(pop, condition)
     if len(run_params) > 0:
         ea.evo_run(run_params, shared_params, gen)
