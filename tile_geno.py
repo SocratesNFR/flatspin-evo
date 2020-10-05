@@ -73,7 +73,7 @@ class Individual:
     def copy(self):
         # defines which attributes are used when copying
         copy_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "initial_rotation",
-                           "fitness", "fitness_components")
+                           "fitness", "fitness_components", "pheno_Size")
         new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k in copy_attributes})
         # copy attributes that are referenced to unlink
         new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
@@ -660,7 +660,8 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
         i.grid = Grid.fixed_grid(np.array([mag.pos for mag in i.pheno]), grid_size)
 
     # check there are magnets in at least half of grid
-    condition = lambda i: (len(np.unique(i.grid._grid_index,axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and len(i.pheno) >= i.pheno_size
+    condition = lambda i: (len(np.unique(i.grid._grid_index, axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and len(
+        i.pheno) >= i.pheno_size
     run_params = get_default_run_params(pop, condition)
     if len(run_params) > 0:
         ea.evo_run(run_params, shared_params, gen)
@@ -682,8 +683,10 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
 
                 magnitude = np.linalg.norm(mag, axis=3)[0]
                 indv = id2indv[ds.index["indv_id"].values[0]]
-                cells_with_mags = [magnitude[x][y] for x, y in np.unique(indv.grid._grid_index, axis=0)]
-                fitn = np.std(cells_with_mags)
+                cells_with_mags = [(x, y) for x, y in np.unique(indv.grid._grid_index, axis=0)]
+                # fitness is std of the magnitudes of the cells minus std of the number of magnets in each cell
+                fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
+                       np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
                 indv.fitness_components = [fitn, ]
 
     for indv in [i for i in pop if not condition(i)]:
