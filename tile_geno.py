@@ -66,14 +66,14 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes can be stored and displayed with repr
-        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles",
+        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "pheno_size",
                            "initial_rotation", "id", "fitness", "fitness_components")
         return repr({k: v for (k, v) in vars(self).items() if k in repr_attributes})
 
     def copy(self):
         # defines which attributes are used when copying
         copy_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "initial_rotation",
-                           "fitness", "fitness_components", "pheno_Size")
+                           "fitness", "fitness_components", "pheno_size")
         new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k in copy_attributes})
         # copy attributes that are referenced to unlink
         new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
