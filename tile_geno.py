@@ -561,7 +561,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
         queue = list(Dataset.read(shared_params["basepath"]))
         while len(queue) > 0:
             ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"])):
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
                 queue.append(ds)  # if file not exist yet add it to the end and check next
             else:
                 try:
