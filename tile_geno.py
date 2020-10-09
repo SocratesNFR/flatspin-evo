@@ -551,7 +551,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
     shared_params.update(kwargs)
 
     if num_angles > 1:
-        shared_params["input"] = [0, 1] * shared_params["periods"] // 2
+        shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
 
     run_params = get_default_run_params(pop)
     if len(run_params) > 0:
