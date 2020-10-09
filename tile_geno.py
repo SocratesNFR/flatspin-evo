@@ -553,7 +553,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
     if num_angles > 1:
         shared_params["input"] = [0, 1] * shared_params["period"] // 2
 
-    run_params = get_default_run_params()
+    run_params = get_default_run_params(pop)
     if len(run_params) > 0:
         ea.evo_run(run_params, shared_params, gen)
         id2indv = {individual.id: individual for individual in pop}
