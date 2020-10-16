@@ -135,13 +135,15 @@ class Individual:
         bounds = np.vstack(list(map(lambda m: m.xy, [mag for frame in frames for mag in frame])))
         xlim = bounds[:, 0].min(), bounds[:, 0].max()
         ylim = bounds[:, 1].min(), bounds[:, 1].max()
+        if title:
+            title = list(title)
 
         def step(i, maxi, xlim, ylim, title):
             ax.cla()
             for poly in frames[i]:
                 ax.add_patch(poly)
             if title:
-                ax.set_title(f"i = {i}")
+                ax.set_title(title[i] if len(title) > i else title[-1])
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
 
@@ -544,7 +546,7 @@ def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size
     return run_params
 
 
-def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
+def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kwargs):
     if len(pop) < 1:
         return pop
     shared_params = get_default_shared_params(outdir, gen)
@@ -554,10 +556,21 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
 
     run_params = get_default_run_params(pop)
+    frac_run_params = []
     if len(run_params) > 0:
-        ea.evo_run(run_params, shared_params, gen)
-        id2indv = {individual.id: individual for individual in pop}
+        for rp in run_params:
 
+            for frac in other_sizes_fractions:
+                angles_frac = rp["magnet_angles"][:np.ceil(len(rp["magnet_angles"]) * frac)]
+                coords_frac = rp["magnet_coords"][:np.ceil(len(rp["magnet_coords"]) * frac)]
+                frac_run_params.append({{"indv_id": rp["indv.id"],
+                                         "magnet_coords": coords_frac,
+                                         "magnet_angles": angles_frac}})
+        ea.evo_run(run_params, shared_params, gen)  # run full
+
+        id2indv = {individual.id: individual for individual in pop}
+        for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
+            indv.fitness_components = [0]
         queue = list(Dataset.read(shared_params["basepath"]))
         while len(queue) > 0:
             ds = queue.pop(0)
@@ -569,7 +582,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, **kwargs):
                     # fitness is number of steps, but ignores steps from first fifth of the run
                     fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
                         "steps"]
-                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                    id2indv[ds.index["indv_id"].values[0]].fitness_components[0] += fitn
                 except:  # not done saving file
                     queue.append(ds)
     for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
