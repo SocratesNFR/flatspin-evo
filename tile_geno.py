@@ -527,7 +527,7 @@ def scale_to_unit(x, upper, lower):
 
 
 def get_default_shared_params(outdir="", gen=None):
-    default_params = {"run": "local", "model": "CustomSpinIce", "encoder": "angle-sin", "H": 0.01, "phi": 90,
+    default_params = {"run": "local", "model": "CustomSpinIce", "encoder": "AngleSine", "H": 0.01, "phi": 90,
                       "radians": True, "alpha": 30272, "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3, "spp": 100,
                       "hc": 0.03, "periods": 10, "neighbor_distance": 1000}
     if gen is not None:
@@ -664,7 +664,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
         return pop
     shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(kwargs)
-    shared_params["encoder"] = "rotate"
+    shared_params["encoder"] = "Rotate"
     shared_params["input"] = np.linspace(1, 0, shared_params["periods"])
     if np.isscalar(grid_size):
         grid_size = (grid_size, grid_size)
