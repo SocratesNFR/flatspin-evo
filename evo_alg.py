@@ -115,8 +115,9 @@ def save_stats(outdir, pop, minimize_fitness):
                 0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
         except AttributeError:
             pass
-    if len(finite_pop)>0:
-        best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(finite_pop, key=lambda indv: indv.fitness)
+    if len(finite_pop) > 0:
+        best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(finite_pop, key=lambda
+            indv: indv.fitness)
     else:
         best = pop[0]
     out.extend(repr(best))
@@ -128,11 +129,19 @@ def save_stats(outdir, pop, minimize_fitness):
     return best
 
 
-def top_of_the_pops(result, individual_class, interval=400):
+def top_of_the_pops(result, individual_class, interval=400, compress=True):
     frames = []
+    titles = []
+    prev_id = None
+    gen_i = 0
     for indv in [gen["bestIndv"] for gen in result]:
-        frames.append(list(map(lambda m: m.as_patch(), individual_class.from_string(indv).pheno)))
-    return individual_class.frames2animation(frames, interval, True)
+        parsedIndv = individual_class.from_string(indv)
+        if not compress or (prev_id is None or prev_id != parsedIndv.id):
+            frames.append(list(map(lambda m: m.as_patch(), parsedIndv.pheno)))
+            titles.append(f"id = {parsedIndv.id}; gen = {gen_i}; fit = {parsedIndv.fitness}")
+            prev_id = parsedIndv.id
+        gen_i += 1
+    return individual_class.frames2animation(frames, interval, title=titles)
 
 
 def evo_run(runs_params, shared_params, gen):
@@ -243,7 +252,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
                 ((not minimize_fitness) and best.fitness >= stop_at_fitness)
         ):
             print(f"Halting early, fitness {best.fitness} achieved")
-            print(stop_at_fitness is not None,minimize_fitness and best.fitness <= stop_at_fitness,
+            print(stop_at_fitness is not None, minimize_fitness and best.fitness <= stop_at_fitness,
                   (not minimize_fitness) and best.fitness >= stop_at_fitness)
             return best
         gen_times.append((datetime.now() - time).total_seconds())
