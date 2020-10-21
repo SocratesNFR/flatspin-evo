@@ -11,10 +11,8 @@ import os
 import sys
 
 from flatspin.runner import run, run_dist, run_local
-from flatspin.tools.run import import_model
-from flatspin.encoder import encoders as dipole_encoders
 from flatspin.data import Dataset, is_archive_format
-from flatspin.utils import get_default_params
+from flatspin.utils import get_default_params, import_class
 
 
 def rainbow_colours(num):
@@ -147,16 +145,16 @@ def top_of_the_pops(result, individual_class, interval=400, compress=True):
 def evo_run(runs_params, shared_params, gen):
     """ modified from run_sweep.py main()"""
     model_name = shared_params.pop("model", "generated")
-    model_class = import_model(model_name)
-    encoder_name = shared_params.get("encoder", "sin")
-    encoder = dipole_encoders[encoder_name]
+    model_class = import_class(model_name, 'flatspin.model')
+    encoder_name = shared_params.get("encoder", "Sine")
+    encoder_class = import_class(encoder_name, 'flatspin.encoder')
 
     data_format = shared_params.get("format", "npz")
 
     params = get_default_params(run)
-    params['encoder'] = encoder_name
+    params['encoder'] = f'{encoder_class.__module__}.{encoder_class.__name__}'
     params.update(get_default_params(model_class))
-    params.update(get_default_params(encoder))
+    params.update(get_default_params(encoder_class))
     params.update(shared_params)
 
     info = {
