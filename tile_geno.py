@@ -552,7 +552,7 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
 
             continue
 
-        if float.is_integer(dist):
+        if dist - int(dist) == 0:
             dist = int(dist)
             found[fit] = dist
         i.fitness = dist
