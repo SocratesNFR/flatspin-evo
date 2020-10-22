@@ -525,8 +525,8 @@ def evaluate_outer(outer_pop, *, max_age=0, **kwargs):
 def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
     novelty_file = os.path.join(basepath, "novelty.pkl")
     if not os.path.exists(novelty_file):
-        found = [-1] * (max_value - min_value)
-        found_id = [-1] * (max_value - min_value)
+        found = [-1] * (1+ max_value - min_value)
+        found_id = [-1] * (1+ max_value - min_value)
     else:
         with open(novelty_file, "rb") as f:
             found, found_id = pkl.load(f)
@@ -558,7 +558,8 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
         i.fitness = dist
     with open(novelty_file, "wb") as f:
         pkl.dump((found, found_id), f)
-
+    print(found)
+    print(found_id)
     return outer_pop
 
 
