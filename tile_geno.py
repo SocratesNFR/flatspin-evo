@@ -594,6 +594,7 @@ def dist2missing(x, found, missing=-1):
 
 def zero_upto_missing(found, x, missing=-1):
     """zero out values to left and right of x upto a missing value, missing values are negative"""
+    found[x] = 0
     for i in range(0, x):
         if found[i] == missing:
             break
