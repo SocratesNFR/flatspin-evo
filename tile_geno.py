@@ -1,5 +1,5 @@
 import numpy as np
-
+import pickle as pkl
 from shapely.geometry import box
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
@@ -516,10 +516,92 @@ def centre_magnets(magnets, centre_point=(0, 0)):
 
 
 # ===================  FITNESS EVAL ========================
-def evaluate_outer(outer_pop, max_age=0):
+def evaluate_outer(outer_pop, *, max_age=0, **kwargs):
     for i in outer_pop:
         i.fitness = np.sum(i.fitness_components)
     return outer_pop
+
+
+def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
+    novelty_file = os.path.join(basepath, "novelty.pkl")
+    if not os.path.exists(novelty_file):
+        found = [-1] * (max_value - min_value)
+        found_id = [-1] * (max_value - min_value)
+    else:
+        with open(novelty_file, "rb") as f:
+            found, found_id = pkl.load(f)
+
+    for i in outer_pop:
+        fit = np.sum(i.fitness_components)
+        if not np.isfinite(fit):
+            i.fitness = np.nan
+            continue
+
+        fit -= min_value
+
+        dist = dist2missing(fit, found)
+        if not np.isfinite(dist):
+            #all found
+            i.fitness = -1
+            continue
+        if dist == 0:
+            i.fitness = 0
+            # zero out nearby
+            zero_upto_missing(found, fit)
+            found_id[fit] = i.id
+
+            continue
+
+        if float.is_integer(dist):
+            dist = int(dist)
+            found[fit] = dist
+        i.fitness = dist
+    with open(novelty_file, "wb") as f:
+        pkl.dump((found, found_id), f)
+
+    return outer_pop
+
+
+def dist2missing(x, found, missing=-1):
+    """given index x, find smallest distance to a missing value in found"""
+    if found[x] == missing:
+        return 0
+    if found[x] != 0:
+        return found[x]
+    left_dist = np.inf
+    count = 0
+    for j in range(x, 0, -1):
+        if found[j] == missing:
+            left_dist = count
+            break
+        elif found[j] != 0:
+            left_dist = found[j] + count
+            break
+        count += 1
+    right_dist = np.inf
+    count = 0
+    for j in range(x, len(found)):
+        if found[j] == missing:
+            right_dist = count
+            break
+        elif found[j] != 0:
+            right_dist = found[j] + count
+            break
+        count += 1
+    dist = np.min((left_dist, right_dist))
+    return dist
+
+
+def zero_upto_missing(found, x, missing=-1):
+    """zero out values to left and right of x upto a missing value, missing values are negative"""
+    for i in range(0, x):
+        if found[i] == missing:
+            break
+        found[i] = 0
+    for i in range(x, len(found)):
+        if found[i] == missing:
+            break
+        found[i] = 0
 
 
 def scale_to_unit(x, upper, lower):
@@ -622,6 +704,36 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs
     return pop
 
 
+def state_num_fitness(pop, gen, outdir, state_step=None, **kwargs):
+    if len(pop) < 1:
+        return pop
+    shared_params = get_default_shared_params(outdir, gen)
+    shared_params.update(kwargs)
+    run_params = get_default_run_params(pop)
+    if state_step is None:
+        state_step = shared_params["spp"]
+    if len(run_params) > 0:
+        ea.evo_run(run_params, shared_params, gen)
+        id2indv = {individual.id: individual for individual in pop}
+
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                queue.append(ds)  # if file not exist yet add it to the end and check next
+            else:
+                try:
+                    spin = read_table(ds.tablefile("spin"))
+                    fitn = len(np.unique(spin.iloc[::state_step, 1:], axis=0))
+                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
+                except:  # not done saving file
+                    queue.append(ds)
+
+    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
+        indv.fitness_components = [np.nan]
+    return pop
+
+
 def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **kwargs):
     if len(pop) < 1:
         return pop
@@ -707,15 +819,25 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
     return pop
 
 
-def main(outdir=r"results\tileTest", inner=target_state_num_fitness, individual_params={}, minimize_fitness=True,
+def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_params={},
+         outer_eval_params={},
+         minimize_fitness=True,
          **kwargs):
-    known_fits = {"target_state_num": target_state_num_fitness, "flips": flips_fitness,
-                  "std_grid_field": std_grid_field_fitness, "target_order_percent": target_order_percent_fitness}
+    known_fits = {"target_state_num": target_state_num_fitness,
+                  "state_num": state_num_fitness,
+                  "flips": flips_fitness,
+                  "std_grid_field": std_grid_field_fitness,
+                  "target_order_percent": target_order_percent_fitness}
+    known_outer = {"default": evaluate_outer,
+                   "find_all": evaluate_outer_find_all}
     if inner in known_fits:
         inner = known_fits[inner]
 
-    return ea.main(outdir, Individual, inner, evaluate_outer, minimize_fitness, individual_params=individual_params,
-                   **kwargs)
+    if outer in known_outer:
+        outer = known_outer[outer]
+
+    return ea.main(outdir, Individual, inner, outer, minimize_fitness, individual_params=individual_params,
+                   outer_eval_params=outer_eval_params, **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -730,5 +852,7 @@ if __name__ == '__main__':
                         help=r'¯\_(ツ)_/¯')
     parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={})
     parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={})
+    parser.add_argument('-e', '--outer_eval_param', action=StoreKeyValue, default={})
     args = parser.parse_args()
-    main(outdir=args.output, **eval_params(args.parameter), individual_params=eval_params(args.individual_param))
+    main(outdir=args.output, **eval_params(args.parameter), individual_params=eval_params(args.individual_param),
+         outer_eval_params=eval_params(args.outer_eval_param))
