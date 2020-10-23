@@ -572,7 +572,7 @@ def dist2missing(x, found, missing=-1):
         return found[x]
     left_dist = np.inf
     count = 0
-    for j in range(x, 0, -1):
+    for j in range(x, -1, -1):
         if found[j] == missing:
             left_dist = count
             break
