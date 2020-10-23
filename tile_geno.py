@@ -29,7 +29,7 @@ from matplotlib.animation import FuncAnimation, writers
 class Individual:
     _id_counter = count(0)
 
-    def __init__(self, *, max_tiles=1, tile_size=440, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
+    def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
                  pheno_size=40, age=0, id=None, fitness=None, fitness_components=None, tiles=None, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
@@ -308,7 +308,7 @@ class Individual:
 
 
 class Tile(Sequence):
-    def __init__(self, *, mag_w=20, mag_h=50, tile_size=100, max_symbol=1, magnets=None):
+    def __init__(self, *, mag_w=20, mag_h=50, tile_size=150, max_symbol=1, magnets=None):
         """
         make new random tile from scratch
         """
@@ -318,8 +318,8 @@ class Tile(Sequence):
             assert type(magnets) == list
             self.magnets = magnets
         else:
-            # always a magnet at the origin
-            self.magnets = [Magnet(np.random.randint(0, max_symbol, 2), np.array((mag_w, mag_h)) / 2, np.pi / 2,
+            # always a magnet at the origin (centre)
+            self.magnets = [Magnet(np.random.randint(0, max_symbol, 2), np.array((tile_size, tile_size)) / 2, np.pi / 2,
                                    mag_w, mag_h, 0)]
             num_mags = 2  # dangerous to do more
             for _ in range(num_mags - 1):
@@ -526,8 +526,8 @@ def evaluate_outer(outer_pop, *, max_age=0, **kwargs):
 def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
     novelty_file = os.path.join(basepath, "novelty.pkl")
     if not os.path.exists(novelty_file):
-        found = [-1] * (1+ max_value - min_value)
-        found_id = [-1] * (1+ max_value - min_value)
+        found = [-1] * (1 + max_value - min_value)
+        found_id = [-1] * (1 + max_value - min_value)
     else:
         with open(novelty_file, "rb") as f:
             found, found_id = pkl.load(f)
@@ -542,7 +542,7 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
 
         dist = dist2missing(fit, found)
         if not np.isfinite(dist):
-            #all found
+            # all found
             i.fitness = -1
             continue
         if dist == 0:
@@ -597,7 +597,7 @@ def dist2missing(x, found, missing=-1):
 def zero_upto_missing(found, x, missing=-1):
     """zero out values to left and right of x upto a missing value, missing values are negative"""
     found[x] = 0
-    for i in range(0, x):
+    for i in range(x, -1, -1):
         if found[i] == missing:
             break
         found[i] = 0
