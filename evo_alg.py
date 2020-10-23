@@ -209,7 +209,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          elitism=False, individual_params={}, outer_eval_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs), outdir, **outer_eval_params)
+    pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs), basepath=outdir, **outer_eval_params)
     gen_times = []
     for gen in range(1, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
@@ -236,7 +236,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
                     # Eval
         print("    Evaluate")
         pop.extend(evaluate_inner(new_kids, gen, outdir, **kwargs))
-        pop = evaluate_outer(pop, outdir, **outer_eval_params)
+        pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
 
         # Select
         print("    Select")
