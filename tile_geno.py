@@ -498,6 +498,7 @@ class Magnet:
             v.update({"created": created})
         v["pos"] = v["pos"].copy()  # derefernce
         v["angle"] = v["angle"].copy()
+        v["symbol"] = v["symbol"].copy()
         return Magnet(**v)
 
 
