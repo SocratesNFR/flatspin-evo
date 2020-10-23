@@ -875,6 +875,35 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: len(x.pheno)>=min_mags,**flatspin_kwargs)
     return pop
 
+def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
+    from mem_capacity import do_mem_capacity
+    def fit_func(ds):
+        delays = np.arange(0, n_delays+1)
+        spp = int(ds.params['spp'])
+        t = slice(spp-1, None, spp)
+        scores = do_mem_capacity(ds, delays, t=t)
+        fitness_components = scores.mean(axis=-1)
+        print('MC', np.sum(fitness_components))
+        return fitness_components
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
+
+    return pop
+
+def parity_fitness(pop, gen, outdir, n_delays=10, n_bits=3, **kwargs):
+    from parity import do_parity
+    def fit_func(ds):
+        delays = np.arange(0, n_delays)
+        spp = int(ds.params['spp'])
+        t = slice(spp-1, None, spp)
+        scores = do_parity(ds, delays, n_bits, t=t)
+        fitness_components = scores.mean(axis=-1)
+        print(f'PARITY{n_bits}', np.sum(fitness_components))
+        return fitness_components
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
+
+    return pop
 
 def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     def fit_func(ds):
@@ -959,7 +988,10 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_
                   "default": evaluate_outer,
                   "find_all": evaluate_outer_find_all,
                   "pheno_size": pheno_size_fitness,
-                  "image": image_match_fitness}
+                  "image": image_match_fitness,
+                  "mem_capacity": mem_capacity_fitness,
+                  "parity": parity_fitness,
+                  }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 
