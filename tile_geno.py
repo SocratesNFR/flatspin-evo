@@ -646,8 +646,8 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kw
         for rp in run_params:
 
             for frac in other_sizes_fractions:
-                angles_frac = rp["magnet_angles"][:np.ceil(len(rp["magnet_angles"]) * frac)]
-                coords_frac = rp["magnet_coords"][:np.ceil(len(rp["magnet_coords"]) * frac)]
+                angles_frac = rp["magnet_angles"][:int(np.ceil(len(rp["magnet_angles"]) * frac))]
+                coords_frac = rp["magnet_coords"][:int(np.ceil(len(rp["magnet_coords"]) * frac))]
                 frac_run_params.append({{"indv_id": rp["indv.id"],
                                          "magnet_coords": coords_frac,
                                          "magnet_angles": angles_frac}})
