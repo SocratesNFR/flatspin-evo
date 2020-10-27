@@ -648,10 +648,10 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kw
             for frac in other_sizes_fractions:
                 angles_frac = rp["magnet_angles"][:int(np.ceil(len(rp["magnet_angles"]) * frac))]
                 coords_frac = rp["magnet_coords"][:int(np.ceil(len(rp["magnet_coords"]) * frac))]
-                frac_run_params.append({{"indv_id": rp["indv.id"],
+                frac_run_params.append({{"indv_id": rp["indv_id"],
                                          "magnet_coords": coords_frac,
                                          "magnet_angles": angles_frac}})
-        ea.evo_run(run_params, shared_params, gen)  # run full
+        ea.evo_run(run_params + frac_run_params, shared_params, gen)  # run full
 
         id2indv = {individual.id: individual for individual in pop}
         for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
