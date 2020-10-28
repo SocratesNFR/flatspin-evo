@@ -166,7 +166,7 @@ def evo_run(runs_params, shared_params, gen):
 
     ext = data_format if is_archive_format(data_format) else "out"
 
-    outdir_tpl = "gen{:d}indv{:d}." + ext
+    outdir_tpl = "gen{:d}indv{:d}"
 
     basepath = params["basepath"]
     if os.path.exists(basepath):
@@ -180,8 +180,8 @@ def evo_run(runs_params, shared_params, gen):
     for run_params in runs_params:
         newparams = copy.copy(params)
         newparams.update(run_params)
-
-        outdir = outdir_tpl.format(gen, newparams["indv_id"])
+        sub_run_name = newparams["sub_run_name"] if "sub_run_name" in newparams else ""
+        outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
         row = OrderedDict(run_params)
         row.update({'outdir': outdir})
