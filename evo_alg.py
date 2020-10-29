@@ -226,18 +226,25 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True) # debug
         dataset.index = dataset.index.append(ind)
 
+        if not dataset.params:
+            dataset.params = ds.params
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          elitism=False, individual_params={}, outer_eval_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
+
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs), basepath=outdir, **outer_eval_params)
     gen_times = []
 
     index = pd.DataFrame()
-    params = individual_params
+    params = None # to be added by update_superdataset
     info = { 'command': ' '.join(map(shlex.quote, sys.argv)), }
-    dataset = Dataset(index, individual_params, info, basepath=outdir)
+    dataset = Dataset(index, params, info, basepath=outdir)
 
     update_superdataset(dataset, outdir, pop, 0)
     dataset.save()
