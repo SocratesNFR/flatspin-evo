@@ -30,9 +30,10 @@ class Individual:
     _id_counter = count(0)
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
-                 pheno_size=40, age=0, id=None, fitness=None, fitness_components=None, tiles=None, **kwargs):
+                 pheno_size=40, age=0, id=None, gen=0, fitness=None, fitness_components=None, tiles=None, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
+        self.gen = gen # generation of birth
         self.max_tiles = max_tiles
         self.tile_size = tile_size
         self.mag_w = mag_w

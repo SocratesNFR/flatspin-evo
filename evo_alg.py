@@ -203,6 +203,28 @@ def evo_run(runs_params, shared_params, gen):
 
     return
 
+def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
+    pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
+
+    if len(pop) < 1:
+        return
+
+    best = pop[0]
+    if len(pop) > 1:
+        fn = min if minimize_fitness else max
+        best = fn(pop, key=lambda indv: indv.fitness)
+
+    for indv in pop:
+        ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
+        ds = ds.filter(indv_id=indv.id)
+        ind = ds.index
+        ind.insert(0, 'gen', gen) # current generation
+        ind.insert(2, 'fitness', indv.fitness)
+        ind.insert(3, 'best', int(indv == best))
+        # patch outdir
+        ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
+        ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True) # debug
+        dataset.index = dataset.index.append(ind)
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
@@ -211,6 +233,15 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_outer(evaluate_inner(pop, 0, outdir, **kwargs), basepath=outdir, **outer_eval_params)
     gen_times = []
+
+    index = pd.DataFrame()
+    params = individual_params
+    info = { 'command': ' '.join(map(shlex.quote, sys.argv)), }
+    dataset = Dataset(index, individual_params, info, basepath=outdir)
+
+    update_superdataset(dataset, outdir, pop, 0)
+    dataset.save()
+
     for gen in range(1, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
         if len(gen_times) > 0:
@@ -233,6 +264,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
                 if new_kid is not None:  # do not append if crossover failed
                     new_kids.append(new_kid)
 
+        for indv in new_kids:
+            indv.gen = gen
+
                     # Eval
         print("    Evaluate")
         pop.extend(evaluate_inner(new_kids, gen, outdir, **kwargs))
@@ -243,6 +277,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
         assert len(pop) == pop_size
+
+        update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
+        dataset.save()
 
         best = save_stats(outdir, pop, minimize_fitness)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
