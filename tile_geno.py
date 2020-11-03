@@ -182,6 +182,7 @@ class Individual:
         return x
 
     def mutate(self, strength=5):
+        """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy()
         mut_types = ["magPos", "magAngle", "symbol", "tile"]
         if self.initial_rotation is not None:
@@ -204,6 +205,9 @@ class Individual:
                 tile.locked = False
                 tile[x] = copy_mag
                 tile.locked = True
+            else:
+                #return nothing, mutation failed
+                return []
 
         elif mut_type == "magAngle":
             # pick a tile at random, pick a magnet excluding the first magnet and rotate it (about centroid)
@@ -218,6 +222,9 @@ class Individual:
                 tile.locked = False
                 tile[x] = copy_mag
                 tile.locked = True
+            else:
+                # return nothing, mutation failed
+                return []
 
         elif mut_type == "symbol":
             tile = clone.random_tiles()[0]
@@ -253,12 +260,13 @@ class Individual:
 
         clone.age = 0
         clone.refresh()
-        return clone
+        return [clone]
 
     def random_tiles(self, num=1, replace=False):
         return [self.tiles[i] for i in list(np.random.choice(range(len(self.tiles)), size=num, replace=replace))]
 
     def crossover(self, other):
+        """crossover 2 individuls, return any new children as a list """
         if len(self.tiles) == 1 and len(other.tiles) == 1:
             # if both parents have 1 tile, cross over the angle and positions
             # of the magnets
@@ -280,7 +288,7 @@ class Individual:
                 child.tiles[0][i].i_translate(*translate)
 
             if Magnet.any_intersecting(child.tiles[0]):  # crossover failed
-                return None
+                return []
         else:
             num_tiles = (len(self.tiles), len(other.tiles))
             num_tiles = min(self.max_tiles, np.random.randint(min(num_tiles), max(num_tiles) + 1))
@@ -295,7 +303,7 @@ class Individual:
 
         child.age = 0
         child.refresh()
-        return child
+        return [child]
 
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:

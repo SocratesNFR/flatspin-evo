@@ -261,15 +261,13 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         new_kids = []
         for indv in pop:
             if np.random.rand() < mut_prob:
-                new_kids.append(indv.mutate())
+                new_kids += indv.mutate()
         # Crossover!
         print("    Crossover")
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
             if np.random.rand() < cx_prob:
                 partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
-                new_kid = indv.crossover(partner)
-                if new_kid is not None:  # do not append if crossover failed
-                    new_kids.append(new_kid)
+                new_kids += indv.crossover(partner)
 
         for indv in new_kids:
             indv.gen = gen
