@@ -33,7 +33,7 @@ class Individual:
                  pheno_size=40, age=0, id=None, gen=0, fitness=None, fitness_components=None, tiles=None, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
-        self.gen = gen # generation of birth
+        self.gen = gen  # generation of birth
         self.max_tiles = max_tiles
         self.tile_size = tile_size
         self.mag_w = mag_w
@@ -97,6 +97,7 @@ class Individual:
         max_len = 0
         # add origin magnet in the first tile to the frontier
         frontier.append(self.tiles[0][0].copy(created=iter_count))
+        frontier[0].symbol.fill(0)
         frontier[0].i_rotate(self.initial_rotation, 'centroid')
         frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
 
@@ -375,20 +376,16 @@ class Tile(Sequence):
 
         origin_index = 0  # only use origin magnet
         i = 0
-        for counter, angleOffset in zip([0, -1], [0, np.pi]):  # do twice for the 180 degree offset
+        for angle_offset in [0, np.pi]:  # do twice for the 180 degree offset
+            magnet_symbol_index = 0 if mag.angle < np.pi else -1
 
-            # check symbol of origin magnet matches symbol of mag (in current rotation)
-            if self[origin_index].angle > np.pi != mag.angle > np.pi:
-                # if both have angle within the same half disc (0<np.pi or np.pi<2*np.pi)  use corresponding symbols
-                if self[origin_index].symbol[counter] != mag.symbol[counter]:
-                    continue
-            else:
-                # else use opposite symbols i.e 0 and -1 or -1 and 0
-                if self[origin_index].symbol[counter] != mag.symbol[-counter - 1]:
-                    continue
+            # equivalent to 0 if (mag.angle + angle_offset)% (2Pi) < np.pi else -1
+            tile_symbol_index = magnet_symbol_index if angle_offset else (-1 * magnet_symbol_index - 1)
+            if self[origin_index].symbol[tile_symbol_index] != mag.symbol[magnet_symbol_index]:
+                continue
 
             new_tile = self.copy(current_iter)  # copy tile to use as the new magnets to add
-            angle_diff = mag.angle - new_tile[origin_index].angle + angleOffset
+            angle_diff = mag.angle - new_tile[origin_index].angle + angle_offset
             # rotate all magnets in tile (we don't care about the displacement so we can use origin=(0,0))
             new_tile.i_rotate(angle_diff, origin)
 
