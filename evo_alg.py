@@ -246,7 +246,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     info = { 'command': ' '.join(map(shlex.quote, sys.argv)), }
     dataset = Dataset(index, params, info, basepath=outdir)
 
-    update_superdataset(dataset, outdir, pop, 0)
+    update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
     dataset.save()
 
     for gen in range(1, generation_num + 1):
