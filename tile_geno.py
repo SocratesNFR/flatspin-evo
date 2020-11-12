@@ -28,9 +28,14 @@ from matplotlib.animation import FuncAnimation, writers
 
 class Individual:
     _id_counter = count(0)
+    _evolved_params = {}
 
-    def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, initial_rotation=None, max_symbol=1,
-                 pheno_size=40, age=0, id=None, gen=0, fitness=None, fitness_components=None, tiles=None, **kwargs):
+    def set_evolved_params(evolved_params):
+        Individual._evolved_params = evolved_params
+
+    def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
+                 pheno_size=40, age=0, id=None, gen=0, fitness=None, fitness_components=None, tiles=None,
+                 evolved_params_values={}, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -44,10 +49,13 @@ class Individual:
 
         self.fitness = fitness
         self.fitness_components = fitness_components
-        if initial_rotation is not None:
-            self.initial_rotation = initial_rotation
-        else:
-            self.initial_rotation = np.random.uniform(0, 2 * np.pi)
+
+        self.evolved_params_values = evolved_params_values
+        for param in Individual._evolved_params:
+            if self.evolved_params_values.get(param) is None:
+                self.evolved_params_values[param] = np.random.uniform(Individual._evolved_params[param]["low"],
+                                                                      Individual._evolved_params[param]["high"],
+                                                                      Individual._evolved_params[param].get("shape"))
 
         if mag_h > mag_w:
             raise Warning("conversion to flatspin assumes magnet height < magnet width!")
@@ -66,16 +74,15 @@ class Individual:
         self.fitness_components = None
 
     def __repr__(self):
-        # defines which attributes can be stored and displayed with repr
-        repr_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "pheno_size",
-                           "initial_rotation", "id", "fitness", "fitness_components")
-        return repr({k: v for (k, v) in vars(self).items() if k in repr_attributes})
+        # defines which attributes are ignored by repr
+        ignore_attributes = ("gen", "pheno")
+        return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
     def copy(self):
         # defines which attributes are used when copying
-        copy_attributes = ("max_tiles", "tile_size", "mag_w", "mag_h", "age", "tiles", "initial_rotation",
-                           "fitness", "fitness_components", "pheno_size")
-        new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k in copy_attributes})
+        ignore_attributes = ("gen", "evolved_params_values", "pheno", "id")
+        new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
+        new_indv.evolved_params_values = deepcopy(new_indv.evolved_params_values)
         # copy attributes that are referenced to unlink
         new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
 
@@ -98,7 +105,8 @@ class Individual:
         # add origin magnet in the first tile to the frontier
         frontier.append(self.tiles[0][0].copy(created=iter_count))
         frontier[0].symbol.fill(0)
-        frontier[0].i_rotate(self.initial_rotation, 'centroid')
+        if "initial_rotation" in self.evolved_params_values:
+            frontier[0].i_rotate(self.evolved_params_values["initial_rotation"], 'centroid')
         frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
 
         while len(frontier) + len(frozen) < geom_size and len(frontier) > 0 and since_change < no_change_terminator:
@@ -181,12 +189,12 @@ class Individual:
             x = np.clip(x, low, high)
         return x
 
-    def mutate(self, strength=5):
+    def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy()
         mut_types = ["magPos", "magAngle", "symbol", "tile"]
-        if self.initial_rotation is not None:
-            mut_types.append("initRot")
+        if len(self.evolved_params_values) > 0:
+            mut_types.append("param")
         if self.max_tiles == 1:
             mut_types.remove("tile")  # cannot add/remove tiles when max tile is 1
         mut_type = np.random.choice(mut_types)
@@ -197,7 +205,8 @@ class Individual:
             tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
             x = 1 + np.random.randint(len(tile[1:]))
             copy_mag = tile[x].copy()
-            distance = Individual.gauss_mutate(copy_mag.pos, 5 * strength, 0, clone.tile_size) - copy_mag.pos
+            distance = Individual.gauss_mutate(copy_mag.pos, strength * self.tile_size / 200, 0,
+                                               clone.tile_size) - copy_mag.pos
             copy_mag.i_translate(*distance)
 
             if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
@@ -206,7 +215,7 @@ class Individual:
                 tile[x] = copy_mag
                 tile.locked = True
             else:
-                #return nothing, mutation failed
+                # return nothing, mutation failed
                 return []
 
         elif mut_type == "magAngle":
@@ -214,7 +223,7 @@ class Individual:
             tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
             x = 1 + np.random.randint(len(tile[1:]))
             copy_mag = tile[x].copy()
-            rotation = np.random.normal(0, 5 * strength)
+            rotation = np.random.normal(0, strength * (2 * np.pi) / 200)
             copy_mag.i_rotate(rotation, "centroid")
 
             if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
@@ -253,11 +262,17 @@ class Individual:
                     Tile(mag_w=self.mag_w, mag_h=self.mag_h, tile_size=self.tile_size, max_symbol=self.max_symbol))
             else:
                 raise (Exception("unhandled mutation type"))
-        elif mut_type == "initRot":
-            clone.initial_rotation = Individual.gauss_mutate(self.initial_rotation, 10) % (2 * np.pi)
+
+        elif mut_type == "param":
+            param_name = np.random.choice(list(self.evolved_params_values))
+            mut_param_info = Individual._evolved_params[param_name]
+            new_val = Individual.gauss_mutate(self.evolved_params_values[param_name],
+                                              strength * (mut_param_info["high"] - mut_param_info["low"]) / 200)
+            clone.evolved_params_values[param_name] = new_val
+            print(param_name)
+            print(new_val)
         else:
             raise (Exception("unhandled mutation type"))
-
         clone.age = 0
         clone.refresh()
         return [clone]
@@ -658,9 +673,10 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kw
                                         "magnet_coords": coords_frac,
                                         "magnet_angles": angles_frac,
                                         "sub_run_name": f"frac{frac}"})
-        ea.evo_run(run_params + frac_run_params, shared_params, gen)  # run full
-
         id2indv = {individual.id: individual for individual in pop}
+        evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
+        ea.evo_run(run_params + frac_run_params, shared_params, gen, evolved_params)  # run full
+
         for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
             indv.fitness_components = [0]
         queue = list(Dataset.read(shared_params["basepath"]))
@@ -830,24 +846,19 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
 
 
 def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_params={},
-         outer_eval_params={},
-         minimize_fitness=True,
-         **kwargs):
+         outer_eval_params={}, evolved_params={}, minimize_fitness=True, **kwargs):
     known_fits = {"target_state_num": target_state_num_fitness,
                   "state_num": state_num_fitness,
                   "flips": flips_fitness,
                   "std_grid_field": std_grid_field_fitness,
-                  "target_order_percent": target_order_percent_fitness}
-    known_outer = {"default": evaluate_outer,
-                   "find_all": evaluate_outer_find_all}
-    if inner in known_fits:
-        inner = known_fits[inner]
-
-    if outer in known_outer:
-        outer = known_outer[outer]
+                  "target_order_percent": target_order_percent_fitness,
+                  "default": evaluate_outer,
+                  "find_all": evaluate_outer_find_all}
+    inner = known_fits.get(inner, inner)
+    outer = known_fits.get(outer, outer)
 
     return ea.main(outdir, Individual, inner, outer, minimize_fitness, individual_params=individual_params,
-                   outer_eval_params=outer_eval_params, **kwargs)
+                   outer_eval_params=outer_eval_params, evolved_params=evolved_params, **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -860,9 +871,17 @@ if __name__ == '__main__':
     # common
     parser.add_argument('-o', '--output', metavar='FILE',
                         help=r'¯\_(ツ)_/¯')
-    parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={})
-    parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={})
-    parser.add_argument('-e', '--outer_eval_param', action=StoreKeyValue, default={})
+    parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={},
+                        help="param passed to flatspin and inner evaluate fitness function")
+    parser.add_argument('-e', '--evolved_params', action=StoreKeyValue, default={},
+                        help="param passed to flatspin and inner evaluate that is under evolutionary control, format: [param_name, low, high] or [param_name, low, high, shape*]")
+    parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={},
+                        help="param passed to Individual constructor")
+    parser.add_argument('-f', '--outer_eval_param', action=StoreKeyValue, default={},
+                        help="param past to outer evlauate fitness function")
+
     args = parser.parse_args()
-    main(outdir=args.output, **eval_params(args.parameter), individual_params=eval_params(args.individual_param),
+
+    main(outdir=args.output, **eval_params(args.parameter), evolved_params=eval_params(args.evolved_params),
+         individual_params=eval_params(args.individual_param),
          outer_eval_params=eval_params(args.outer_eval_param))

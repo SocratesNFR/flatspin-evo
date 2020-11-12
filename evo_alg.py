@@ -142,7 +142,7 @@ def top_of_the_pops(result, individual_class, interval=400, compress=True):
     return individual_class.frames2animation(frames, interval, title=titles)
 
 
-def evo_run(runs_params, shared_params, gen):
+def evo_run(runs_params, shared_params, gen, evolved_params=[]):
     """ modified from run_sweep.py main()"""
     model_name = shared_params.pop("model", "generated")
     model_class = import_class(model_name, 'flatspin.model')
@@ -177,10 +177,13 @@ def evo_run(runs_params, shared_params, gen):
     index = []
     filenames = []
     # Generate queue
-    for run_params in runs_params:
+    for i, run_params in enumerate(runs_params):
         newparams = copy.copy(params)
         newparams.update(run_params)
-        sub_run_name = newparams["sub_run_name"] if "sub_run_name" in newparams else ""
+        if evolved_params:
+            #get any flatspin params in evolved_params and update run param with them
+            run_params.update({k: v for k, v in evolved_params[i].items() if k in newparams})
+        sub_run_name = newparams["sub_run_name"] if "sub_run_name" in newparams else "x"
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
         row = OrderedDict(run_params)
@@ -193,7 +196,7 @@ def evo_run(runs_params, shared_params, gen):
     dataset.save()
 
     # Run!
-    print("Starting sweep with {} runs".format(len(dataset)))
+    #print("Starting sweep with {} runs".format(len(dataset)))
     run_type = shared_params.get("run", "local")
     if run_type == 'local':
         run_local(dataset)
@@ -202,6 +205,7 @@ def evo_run(runs_params, shared_params, gen):
         run_dist(dataset, wait=False)
 
     return
+
 
 def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
@@ -218,22 +222,28 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
         ds = ds.filter(indv_id=indv.id)
         ind = ds.index
-        ind.insert(0, 'gen', gen) # current generation
+        ind.insert(0, 'gen', gen)  # current generation
         ind.insert(2, 'fitness', indv.fitness)
         ind.insert(3, 'best', int(indv == best))
         # patch outdir
         ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
-        ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True) # debug
+        ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True)  # debug
         dataset.index = dataset.index.append(ind)
 
         if not dataset.params:
             dataset.params = ds.params
 
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         elitism=False, individual_params={}, outer_eval_params={}, stop_at_fitness=None, **kwargs):
+         elitism=False, individual_params={}, outer_eval_params={}, evolved_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
 
+    for evo_p in evolved_params:
+        evolved_params[evo_p] = {"low": evolved_params[evo_p][0],
+                                 "high": evolved_params[evo_p][1],
+                                 "shape": (evolved_params[evo_p][2:] if len(evolved_params[evo_p]) > 2 else None)}
+    individual_class.set_evolved_params(evolved_params)
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
@@ -242,8 +252,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     gen_times = []
 
     index = pd.DataFrame()
-    params = None # to be added by update_superdataset
-    info = { 'command': ' '.join(map(shlex.quote, sys.argv)), }
+    params = None  # to be added by update_superdataset
+    info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
     dataset = Dataset(index, params, info, basepath=outdir)
 
     update_superdataset(dataset, outdir, pop, 0)
@@ -272,7 +282,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         for indv in new_kids:
             indv.gen = gen
 
-                    # Eval
+            # Eval
         print("    Evaluate")
         pop.extend(evaluate_inner(new_kids, gen, outdir, **kwargs))
         pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
