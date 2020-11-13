@@ -199,7 +199,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[]):
     #print("Starting sweep with {} runs".format(len(dataset)))
     run_type = shared_params.get("run", "local")
     if run_type == 'local':
-        run_local(dataset)
+        run_local(dataset, False)
 
     elif run_type == 'dist':
         run_dist(dataset, wait=False)

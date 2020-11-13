@@ -75,7 +75,7 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes are ignored by repr
-        ignore_attributes = ("gen", "pheno")
+        ignore_attributes = ("pheno")
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
     def copy(self):
@@ -673,7 +673,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kw
                                         "magnet_coords": coords_frac,
                                         "magnet_angles": angles_frac,
                                         "sub_run_name": f"frac{frac}"})
-        id2indv = {individual.id: individual for individual in pop}
+            id2indv = {individual.id: individual for individual in pop}
         evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
         ea.evo_run(run_params + frac_run_params, shared_params, gen, evolved_params)  # run full
 
