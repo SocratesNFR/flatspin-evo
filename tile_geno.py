@@ -269,8 +269,6 @@ class Individual:
             new_val = Individual.gauss_mutate(self.evolved_params_values[param_name],
                                               strength * (mut_param_info["high"] - mut_param_info["low"]) / 200)
             clone.evolved_params_values[param_name] = new_val
-            print(param_name)
-            print(new_val)
         else:
             raise (Exception("unhandled mutation type"))
         clone.age = 0
