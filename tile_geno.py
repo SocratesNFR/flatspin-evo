@@ -4,25 +4,25 @@ from shapely.geometry import box
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
 from itertools import count
-from copy import deepcopy
-from collections import Sequence
+from copy import deepcopy, copy
+from collections import Sequence, OrderedDict
 from time import sleep
-from scipy.optimize import linear_sum_assignment
-from scipy.spatial.distance import cdist
-from scipy.spatial import KDTree
 import evo_alg as ea
+from functools import partial
 
-from flatspin.data import Dataset, read_table, load_output
+from flatspin.data import Dataset, read_table, load_output, is_archive_format
 from flatspin.grid import Grid
 from flatspin.cmdline import parse_time
+from flatspin.utils import get_default_params, import_class
+from flatspin.runner import run, run_dist, run_local
+
 import os
 import pandas as pd
-# to make animation work in pycharm
-import matplotlib
-# matplotlib.use("Qt5Agg")
+import shlex
+import sys
+
 from matplotlib import pyplot as plt
 from matplotlib import patches
-from matplotlib.transforms import Affine2D
 from matplotlib.animation import FuncAnimation, writers
 
 
@@ -30,6 +30,7 @@ class Individual:
     _id_counter = count(0)
     _evolved_params = {}
 
+    @staticmethod
     def set_evolved_params(evolved_params):
         Individual._evolved_params = evolved_params
 
@@ -650,12 +651,128 @@ def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size
     return run_params
 
 
-def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kwargs):
+def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None,
+                  condition=lambda i: len(i.pheno) >= i.pheno_size, **flatspin_kwargs):
+    """
+    fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
+    if an Individual already has fitness components the lists will be summed element wise
+    (allows for multiple datasets per Individual)
+    """
     if len(pop) < 1:
         return pop
-    shared_params = get_default_shared_params(outdir, gen)
-    shared_params.update(kwargs)
+    if run_params is None:
+        run_params = get_default_run_params(pop, condition)
+    default_shared = get_default_shared_params(outdir, gen)
+    if shared_params is not None:
+        default_shared.update(shared_params)
+    shared_params = default_shared
+    shared_params.update(flatspin_kwargs)
 
+    if len(run_params) > 0:
+        id2indv = {individual.id: individual for individual in pop}
+        evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
+        evo_run(run_params, shared_params, gen, evolved_params)
+
+        queue = list(Dataset.read(shared_params["basepath"]))
+        while len(queue) > 0:
+            ds = queue.pop(0)
+            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                queue.append(ds)  # if file not exist yet add it to the end and check next
+            else:
+                with np.errstate(all='ignore'):
+                    try:
+                        #calculate fitness of a dataset
+                        fit_components = fit_func(ds)
+                        try:
+                            fit_components = list(fit_components)
+                        except(TypeError):
+                            fit_components = [fit_components]
+
+                        #assign the fitness of the correct individual
+                        indv = id2indv[ds.index["indv_id"].values[0]]
+                        if indv.fitness_components is not None:
+                            indv.fitness_components = np.add(fit_components, indv.fitness_components).tolist()
+                        else:
+                            indv.fitness_components = fit_components
+                    except(FileNotFoundError):  # not done saving file
+                        queue.append(ds)
+
+    for indv in [i for i in pop if not condition(i)]:
+        indv.fitness_components = [np.nan]
+    return pop
+
+
+def evo_run(runs_params, shared_params, gen, evolved_params=[]):
+    """ modified from run_sweep.py main()"""
+    model_name = shared_params.pop("model", "generated")
+    model_class = import_class(model_name, 'flatspin.model')
+    encoder_name = shared_params.get("encoder", "Sine")
+    encoder_class = import_class(encoder_name, 'flatspin.encoder')
+
+    data_format = shared_params.get("format", "npz")
+
+    params = get_default_params(run)
+    params['encoder'] = f'{encoder_class.__module__}.{encoder_class.__name__}'
+    params.update(get_default_params(model_class))
+    params.update(get_default_params(encoder_class))
+    params.update(shared_params)
+
+    info = {
+        'model': f'{model_class.__module__}.{model_class.__name__}',
+        'model_name': model_name,
+        'data_format': data_format,
+        'command': ' '.join(map(shlex.quote, sys.argv)),
+    }
+
+    ext = data_format if is_archive_format(data_format) else "out"
+
+    outdir_tpl = "gen{:d}indv{:d}"
+
+    basepath = params["basepath"]
+    if os.path.exists(basepath):
+        # Refuse to overwrite an existing dataset
+        raise FileExistsError(basepath)
+    os.makedirs(basepath)
+
+    index = []
+    filenames = []
+    # Generate queue
+    for i, run_params in enumerate(runs_params):
+        newparams = copy(params)
+        newparams.update(run_params)
+        if evolved_params:
+            # get any flatspin params in evolved_params and update run param with them
+            run_params.update({k: v for k, v in evolved_params[i].items() if k in newparams})
+        sub_run_name = newparams["sub_run_name"] if "sub_run_name" in newparams else "x"
+        outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
+        filenames.append(outdir)
+        row = OrderedDict(run_params)
+        row.update({'outdir': outdir})
+        index.append(row)
+
+    # Save dataset
+    index = pd.DataFrame(index)
+    dataset = Dataset(index, params, info, basepath)
+    dataset.save()
+
+    # Run!
+    # print("Starting sweep with {} runs".format(len(dataset)))
+    rs = np.random.get_state()
+
+    run_type = shared_params.get("run", "local")
+    if run_type == 'local':
+        run_local(dataset, False)
+
+    elif run_type == 'dist':
+        run_dist(dataset, wait=False)
+
+    np.random.set_state(rs)
+    return
+
+
+def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **flatspin_kwargs):
+    shared_params = get_default_shared_params(outdir,gen)
+    shared_params.update(flatspin_kwargs)
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
 
@@ -672,135 +789,65 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **kw
                                         "magnet_angles": angles_frac,
                                         "sub_run_name": f"frac{frac}"})
 
-        id2indv = {individual.id: individual for individual in pop}
-        evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params + frac_run_params]
-        ea.evo_run(run_params + frac_run_params, shared_params, gen, evolved_params)  # run full
+        def fit_func(ds):
+            # fitness is number of steps, but ignores steps from first fifth of the run
+            steps = read_table(ds.tablefile("steps"))
+            fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"]
+            return fitn
 
-        for indv in [i for i in pop if len(i.pheno) >= i.pheno_size]:
-            indv.fitness_components = [0]
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-            else:
-                try:
-                    steps = read_table(ds.tablefile("steps"))
-                    # fitness is number of steps, but ignores steps from first fifth of the run
-                    fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
-                        "steps"]
-                    id2indv[ds.index["indv_id"].values[0]].fitness_components[0] += fitn
-                except:  # not done saving file
-                    queue.append(ds)
-    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
-        indv.fitness_components = [np.nan]
-    # for i in pop:
-    #   print("fit comp :" + str(i.fitness_components))
+    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params,
+                        run_params=run_params + frac_run_params, **flatspin_kwargs)
     return pop
 
 
-def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **kwargs):
-    if len(pop) < 1:
-        return pop
-    shared_params = get_default_shared_params(outdir, gen)
-    shared_params.update(kwargs)
-    run_params = get_default_run_params(pop)
-    if state_step is None:
-        state_step = shared_params["spp"]
-    if len(run_params) > 0:
-        ea.evo_run(run_params, shared_params, gen)
-        id2indv = {individual.id: individual for individual in pop}
+def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatspin_kwargs):
+    def fit_func(ds):
+        nonlocal state_step
+        if state_step is None:
+            state_step = ds.params["spp"]
+        spin = read_table(ds.tablefile("spin"))
+        fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
+        return fitn
 
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-            else:
-                try:
-                    spin = read_table(ds.tablefile("spin"))
-                    fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
-                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except:  # not done saving file
-                    queue.append(ds)
-
-    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
-        indv.fitness_components = [np.nan]
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
 
 
-def state_num_fitness(pop, gen, outdir, state_step=None, **kwargs):
-    if len(pop) < 1:
-        return pop
-    shared_params = get_default_shared_params(outdir, gen)
-    shared_params.update(kwargs)
-    run_params = get_default_run_params(pop)
-    if state_step is None:
-        state_step = shared_params["spp"]
-    if len(run_params) > 0:
-        ea.evo_run(run_params, shared_params, gen)
-        id2indv = {individual.id: individual for individual in pop}
+def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
 
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-            else:
-                try:
-                    spin = read_table(ds.tablefile("spin"))
-                    fitn = len(np.unique(spin.iloc[::state_step, 1:], axis=0))
-                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except:  # not done saving file
-                    queue.append(ds)
+    def fit_func(ds):
+        nonlocal state_step
+        if state_step is None:
+            state_step = ds.params["spp"]
+        spin = read_table(ds.tablefile("spin"))
+        fitn = len(np.unique(spin.iloc[::state_step, 1:], axis=0))
+        return fitn
 
-    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
-        indv.fitness_components = [np.nan]
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
 
 
-def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **kwargs):
-    if len(pop) < 1:
-        return pop
-    shared_params = get_default_shared_params(outdir, gen)
-    shared_params.update(kwargs)
-
+def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **flatspin_kwargs):
+    shared_params = {}
     shared_params["phi"] = 360
     shared_params["input"] = (angles % (2 * np.pi)) / (2 * np.pi)
-    t = parse_time(f"::{shared_params['spp']}")
+
     if np.isscalar(grid_size):
         grid_size = (grid_size, grid_size)
 
-    run_params = get_default_run_params(pop)
-    if len(run_params) > 0:
-        ea.evo_run(run_params, shared_params, gen)
-        id2indv = {individual.id: individual for individual in pop}
+        def fit_func(ds):
+            mag = load_output(ds, "mag", t=ds.params["spp"], grid_size=grid_size, flatten=False)
+            magnitude = np.linalg.norm(mag, axis=3)
+            summ = np.sum(magnitude, axis=0)
+            fitn = np.std(summ) * np.mean(summ)
+            return fitn
 
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-            else:
-                try:
-                    mag = load_output(ds, "mag", t=t, grid_size=grid_size, flatten=False)
-                    magnitude = np.linalg.norm(mag, axis=3)
-                    summ = np.sum(magnitude, axis=0)
-                    fitn = np.std(summ) * np.mean(summ)
-                    id2indv[ds.index["indv_id"].values[0]].fitness_components = [fitn, ]
-                except:  # not done saving file
-                    queue.append(ds)
-
-    for indv in [i for i in pop if len(i.pheno) < i.pheno_size]:
-        indv.fitness_components = [np.nan]
+    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params, **flatspin_kwargs)
     return pop
 
 
-def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
-    if len(pop) < 1:
-        return pop
-    shared_params = get_default_shared_params(outdir, gen)
-    shared_params.update(kwargs)
+def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **flatspin_kwargs):
+    shared_params = {}
     shared_params["encoder"] = "Rotate"
     shared_params["input"] = np.linspace(1, 0, shared_params["periods"])
     if np.isscalar(grid_size):
@@ -810,37 +857,21 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **kwargs):
         i.grid = Grid.fixed_grid(np.array([mag.pos for mag in i.pheno]), grid_size)
 
     # check there are magnets in at least half of grid
-    condition = lambda i: (len(np.unique(i.grid._grid_index, axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and len(
-        i.pheno) >= i.pheno_size
-    run_params = get_default_run_params(pop, condition)
-    if len(run_params) > 0:
-        ea.evo_run(run_params, shared_params, gen)
-        id2indv = {individual.id: individual for individual in pop}
+    condition = lambda i: (len(np.unique(i.grid._grid_index, axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and \
+                          len(i.pheno) >= i.pheno_size
+    id2indv = {individual.id: individual for individual in pop}
 
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-                sleep(1)
-            else:
-                try:
-                    mag = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False)
-                except:  # not done saving file
-                    queue.append(ds)
-                    sleep(1)
-                    continue
+    def fit_func(ds):
+        mag = load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False)
+        magnitude = np.linalg.norm(mag, axis=3)[0]
+        indv = id2indv[ds.index["indv_id"].values[0]]
+        cells_with_mags = [(x, y) for x, y in np.unique(indv.grid._grid_index, axis=0)]
+        # fitness is std of the magnitudes of the cells minus std of the number of magnets in each cell
+        fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
+               np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
+        return fitn
 
-                magnitude = np.linalg.norm(mag, axis=3)[0]
-                indv = id2indv[ds.index["indv_id"].values[0]]
-                cells_with_mags = [(x, y) for x, y in np.unique(indv.grid._grid_index, axis=0)]
-                # fitness is std of the magnitudes of the cells minus std of the number of magnets in each cell
-                fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
-                       np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
-                indv.fitness_components = [fitn, ]
-
-    for indv in [i for i in pop if not condition(i)]:
-        indv.fitness_components = [np.nan]
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, shared_params=shared_params, **flatspin_kwargs)
     return pop
 
 
