@@ -35,7 +35,8 @@ class Individual:
         Individual._evolved_params = evolved_params
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
-                 pheno_size=40, age=0, id=None, gen=0, fitness=None, fitness_components=None, tiles=None,
+                 pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
+                 tiles=None,
                  evolved_params_values={}, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
@@ -47,7 +48,9 @@ class Individual:
         self.age = age
         self.max_symbol = max_symbol
         self.pheno_size = pheno_size
-
+        self.pheno_bounds = pheno_bounds
+        if self.pheno_bounds and np.isscalar(pheno_bounds):
+            self.pheno_bounds = [pheno_bounds] * 2
         self.fitness = fitness
         self.fitness_components = fitness_components
 
@@ -92,6 +95,7 @@ class Individual:
     @staticmethod
     def from_string(s):
         array = np.array
+        inf = np.inf
         params = eval(s)
         # Instanciate Magnets from result of repr
         params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
@@ -120,7 +124,12 @@ class Individual:
                     new_mags = tile.apply_to_mag(magnet, iter_count)
 
                     for new_mag in new_mags:
-                        if not new_mag.is_intersecting(frontier + frozen + new_front):
+                        # check doesnt intersect any magnets and if there are bounds is within them
+                        if not new_mag.is_intersecting(frontier + frozen + new_front) and not (
+                                self.pheno_bounds
+                                and not (-self.pheno_bounds[0] < new_mag.pos[0] < self.pheno_bounds[0]
+                                         and -self.pheno_bounds[1] < new_mag.pos[1] < self.pheno_bounds[1])
+                        ):
                             new_front.append(new_mag)
 
             frozen.extend(frontier)
@@ -137,7 +146,8 @@ class Individual:
             # plt.show()
             # self.anime.save("anime.mp4")
 
-        return centre_magnets(frozen + frontier)[:geom_size]
+        return centre_magnets(frozen + frontier)[:geom_size] if np.isfinite(geom_size) else centre_magnets(
+            frozen + frontier)
 
     @staticmethod
     def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6)):
@@ -681,14 +691,14 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
             else:
                 with np.errstate(all='ignore'):
                     try:
-                        #calculate fitness of a dataset
+                        # calculate fitness of a dataset
                         fit_components = fit_func(ds)
                         try:
                             fit_components = list(fit_components)
                         except(TypeError):
                             fit_components = [fit_components]
 
-                        #assign the fitness of the correct individual
+                        # assign the fitness of the correct individual
                         indv = id2indv[ds.index["indv_id"].values[0]]
                         if indv.fitness_components is not None:
                             indv.fitness_components = np.add(fit_components, indv.fitness_components).tolist()
@@ -771,7 +781,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[]):
 
 
 def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **flatspin_kwargs):
-    shared_params = get_default_shared_params(outdir,gen)
+    shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
@@ -814,7 +824,6 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
 
 
 def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
-
     def fit_func(ds):
         nonlocal state_step
         if state_step is None:
@@ -824,6 +833,18 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
+    return pop
+
+
+def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
+    id2indv = {individual.id: individual for individual in pop}
+    shared_params = {"spp": 1, "periods": 1, "H": 0, "neighbor_distance": 1}
+
+    def fit_func(ds):
+        return len(id2indv[ds.index["indv_id"].values[0]].pheno)
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: True, shared_params=shared_params,
+                        **flatspin_kwargs)
     return pop
 
 
@@ -883,7 +904,8 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_
                   "std_grid_field": std_grid_field_fitness,
                   "target_order_percent": target_order_percent_fitness,
                   "default": evaluate_outer,
-                  "find_all": evaluate_outer_find_all}
+                  "find_all": evaluate_outer_find_all,
+                  "pheno_size": pheno_size_fitness}
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 
