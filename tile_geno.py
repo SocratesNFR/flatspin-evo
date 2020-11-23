@@ -35,8 +35,7 @@ class Individual:
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
                  pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
-                 tiles=None,
-                 evolved_params_values={}, **kwargs):
+                 tiles=None, init_pheno=True, evolved_params_values={}, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -69,7 +68,8 @@ class Individual:
         else:
             self.tiles = [Tile(mag_w=mag_w, mag_h=mag_h, tile_size=tile_size, max_symbol=max_symbol) for _ in
                           range(np.random.randint(1, max_tiles + 1))]
-        self.pheno = self.geno2pheno(geom_size=self.pheno_size)
+        if init_pheno:
+            self.pheno = self.geno2pheno(geom_size=self.pheno_size)
 
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
@@ -81,10 +81,12 @@ class Individual:
         ignore_attributes = ("pheno")
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-    def copy(self):
+    def copy(self, **overide_kwargs):
         # defines which attributes are used when copying
-        ignore_attributes = ("gen", "evolved_params_values", "pheno", "id")
-        new_indv = Individual(**{k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
+        ignore_attributes = ("gen", "evolved_params_values", "pheno", "id", "init_pheno")
+        params = {k: v for (k, v) in vars(self).items() if k not in ignore_attributes}
+        params.update(overide_kwargs)
+        new_indv = Individual(**params)
         new_indv.evolved_params_values = deepcopy(new_indv.evolved_params_values)
         # copy attributes that are referenced to unlink
         new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
@@ -201,7 +203,7 @@ class Individual:
 
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
-        clone = self.copy()
+        clone = self.copy(init_pheno=False)
         mut_types = ["magPos", "magAngle", "symbol", "tile"]
         if len(self.evolved_params_values) > 0:
             mut_types.append("param")
@@ -296,7 +298,7 @@ class Individual:
             parents = [self, other]
             np.random.shuffle(parents)
 
-            child = parents[0].copy()
+            child = parents[0].copy(init_pheno=False)
             for i in range(1, len(child.tiles[0])):  # probably just [1]
                 angles = (parents[0].tiles[0][i].angle, parents[1].tiles[0][i].angle)
                 poss = (parents[0].tiles[0][i].pos, parents[1].tiles[0][i].pos)
@@ -803,7 +805,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **fl
     frac_run_params = []
     if len(run_params) > 0:
         for rp in run_params:
-
+            rp["sub_run_name"] = f"frac{1}"
             for frac in other_sizes_fractions:
                 angles_frac = rp["magnet_angles"][:int(np.ceil(len(rp["magnet_angles"]) * frac))]
                 coords_frac = rp["magnet_coords"][:int(np.ceil(len(rp["magnet_coords"]) * frac))]
