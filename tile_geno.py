@@ -9,6 +9,7 @@ from collections import Sequence, OrderedDict
 from time import sleep
 import evo_alg as ea
 from functools import partial
+from PIL import Image
 
 from flatspin.data import Dataset, read_table, load_output, is_archive_format
 from flatspin.grid import Grid
@@ -662,7 +663,7 @@ def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size
 
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None,
-                  condition=lambda i: len(i.pheno) >= i.pheno_size, **flatspin_kwargs):
+                  condition=lambda i: len(i.pheno) >= i.pheno_size, group_by_indv=False, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the lists will be summed element wise
@@ -681,38 +682,53 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
         evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
-        evo_run(run_params, shared_params, gen, evolved_params)
+        evo_run(run_params, shared_params, gen, evolved_params, wait=group_by_indv)
 
-        queue = list(Dataset.read(shared_params["basepath"]))
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                queue.append(ds)  # if file not exist yet add it to the end and check next
-            else:
-                with np.errstate(all='ignore'):
-                    try:
-                        # calculate fitness of a dataset
-                        fit_components = fit_func(ds)
+        datasets = Dataset.read(shared_params["basepath"])
+        if not group_by_indv:
+            queue = list(datasets)
+            while len(queue) > 0:
+                ds = queue.pop(0)
+                if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
+                    queue.append(ds)  # if file not exist yet add it to the end and check next
+                else:
+                    with np.errstate(all='ignore'):
                         try:
-                            fit_components = list(fit_components)
-                        except(TypeError):
-                            fit_components = [fit_components]
+                            # calculate fitness of a dataset
+                            fit_components = fit_func(ds)
+                            try:
+                                fit_components = list(fit_components)
+                            except(TypeError):
+                                fit_components = [fit_components]
 
-                        # assign the fitness of the correct individual
-                        indv = id2indv[ds.index["indv_id"].values[0]]
-                        if indv.fitness_components is not None:
-                            indv.fitness_components = np.add(fit_components, indv.fitness_components).tolist()
-                        else:
-                            indv.fitness_components = fit_components
-                    except(FileNotFoundError):  # not done saving file
-                        queue.append(ds)
+                            # assign the fitness of the correct individual
+                            indv = id2indv[ds.index["indv_id"].values[0]]
+                            if indv.fitness_components is not None:
+                                indv.fitness_components += fit_components
+                            else:
+                                indv.fitness_components = fit_components
+                        except(FileNotFoundError):  # not done saving file
+                            queue.append(ds)
+                            sleep(2)
+        else:
+            group = datasets.groupby("indv_id")
+            for id, ds in group:
+                try:
+                    fit_components = list(fit_components)
+                except(TypeError):
+                    fit_components = [fit_components]
+                indv = id2indv[id]
+                if indv.fitness_components is not None:
+                    indv.fitness_components += fit_components
+                else:
+                    indv.fitness_components = fit_components
 
     for indv in [i for i in pop if not condition(i)]:
         indv.fitness_components = [np.nan]
     return pop
 
 
-def evo_run(runs_params, shared_params, gen, evolved_params=[]):
+def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
     """ modified from run_sweep.py main()"""
     model_name = shared_params.pop("model", "generated")
     model_class = import_class(model_name, 'flatspin.model')
@@ -774,7 +790,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[]):
         run_local(dataset, False)
 
     elif run_type == 'dist':
-        run_dist(dataset, wait=False)
+        run_dist(dataset, wait=wait)
 
     np.random.set_state(rs)
     return
@@ -799,11 +815,11 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **fl
                                         "magnet_angles": angles_frac,
                                         "sub_run_name": f"frac{frac}"})
 
-        def fit_func(ds):
-            # fitness is number of steps, but ignores steps from first fifth of the run
-            steps = read_table(ds.tablefile("steps"))
-            fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"]
-            return fitn
+    def fit_func(ds):
+        # fitness is number of steps, but ignores steps from first fifth of the run
+        steps = read_table(ds.tablefile("steps"))
+        fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"]
+        return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params,
                         run_params=run_params + frac_run_params, **flatspin_kwargs)
@@ -816,6 +832,31 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
         if state_step is None:
             state_step = ds.params["spp"]
         spin = read_table(ds.tablefile("spin"))
+        fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
+        return fitn
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
+    return pop
+
+
+def image_match_fitness(pop, gen, outdir, target, image_file_loc, num_blocks=33, threshold=True, **flatspin_kwargs):
+    img = np.asarray(pil.Image.open(image_file_loc))
+    l = []
+    step = len(img) / num_blocks
+    for y in range(num_blocks):
+        row = []
+        for x in range(num_blocks):
+            a = img[int(x * step):int((x + 1) * step), int(y * step):int((y + 1) * step)]
+            row.append(np.mean(a))
+        l.append(row)
+
+    target = np.array(l)
+    if threshold:
+        target = (target > (255 / 2)) * 255
+
+    def fit_func(ds):
+        load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False)  # maybe this?
+
         fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
         return fitn
 
