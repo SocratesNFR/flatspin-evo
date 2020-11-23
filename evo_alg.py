@@ -100,19 +100,7 @@ def save_stats(outdir, pop, minimize_fitness):
     fits = np.array(list(map(lambda indv: indv.fitness, pop)))
     fits = fits[np.isfinite(fits)]
     finite_pop = [pop[i] for i in np.where(np.isfinite(fits))[0]]
-    if len(fits) > 0:
-        out = [f"mean: {(np.mean(fits))}; max: {(np.max(fits))}; min: {(np.min(fits))}",
-               "\nBest indv in current pop:\n"]
-    else:
-        out = [f"mean: {np.nan}; max: {np.nan}; min: {np.nan}",
-               "\nBest indv in current pop:\n"]
-    if len(fits) > 0:
-        try:  # save fitness components if they exist
-            fit_comps = list(map(lambda indv: indv.fitness_components, pop))
-            out[
-                0] += f"; cMean: {(list(np.mean(fit_comps, 0)))}; cMax: {(list(np.max(fit_comps, 0)))}; cMin: {(list(np.min(fit_comps, 0)))}"
-        except AttributeError:
-            pass
+    out = []
     if len(finite_pop) > 0:
         best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(finite_pop, key=lambda
             indv: indv.fitness)
@@ -142,7 +130,6 @@ def top_of_the_pops(result, individual_class, interval=400, compress=True):
     return individual_class.frames2animation(frames, interval, title=titles)
 
 
-
 def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
 
@@ -161,10 +148,16 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         ind.insert(0, 'gen', gen)  # current generation
         ind.insert(2, 'fitness', indv.fitness)
         ind.insert(3, 'best', int(indv == best))
+
         # patch outdir
         ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
         ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True)  # debug
+        # fitness_componenets should be added last due to variable column number
+        for i, comp in enumerate(indv.fitness_components):
+            ind.insert(6 + i, f"fitness_component{i}", comp)
         dataset.index = dataset.index.append(ind)
+
+
 
         if not dataset.params:
             dataset.params = ds.params
@@ -174,7 +167,6 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          elitism=False, individual_params={}, outer_eval_params={}, evolved_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
-
     for evo_p in evolved_params:
         evolved_params[evo_p] = {"low": evolved_params[evo_p][0],
                                  "high": evolved_params[evo_p][1],

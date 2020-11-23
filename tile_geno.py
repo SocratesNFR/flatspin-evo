@@ -8,12 +8,10 @@ from copy import deepcopy, copy
 from collections import Sequence, OrderedDict
 from time import sleep
 import evo_alg as ea
-from functools import partial
 from PIL import Image
 
 from flatspin.data import Dataset, read_table, load_output, is_archive_format
 from flatspin.grid import Grid
-from flatspin.cmdline import parse_time
 from flatspin.utils import get_default_params, import_class
 from flatspin.runner import run, run_dist, run_local
 
@@ -784,7 +782,6 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
     # Run!
     # print("Starting sweep with {} runs".format(len(dataset)))
     rs = np.random.get_state()
-
     run_type = shared_params.get("run", "local")
     if run_type == 'local':
         run_local(dataset, False)
@@ -840,7 +837,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
 
 
 def image_match_fitness(pop, gen, outdir, target, image_file_loc, num_blocks=33, threshold=True, **flatspin_kwargs):
-    img = np.asarray(pil.Image.open(image_file_loc))
+    img = np.asarray(Image.open(image_file_loc))
     l = []
     step = len(img) / num_blocks
     for y in range(num_blocks):
@@ -855,7 +852,7 @@ def image_match_fitness(pop, gen, outdir, target, image_file_loc, num_blocks=33,
         target = (target > (255 / 2)) * 255
 
     def fit_func(ds):
-        load_output(ds, "mag", t=-1, grid_size=grid_size, flatten=False)  # maybe this?
+        load_output(ds, "mag", t=-1, grid_size=num_blocks, flatten=False)  # maybe this?
 
         fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
         return fitn
