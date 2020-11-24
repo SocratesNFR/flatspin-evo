@@ -550,7 +550,7 @@ def centre_magnets(magnets, centre_point=(0, 0)):
 
 
 # ===================  FITNESS EVAL ========================
-def evaluate_outer(outer_pop, *, max_age=0, **kwargs):
+def evaluate_outer(outer_pop, basepath, *, max_age=0, **kwargs):
     for i in outer_pop:
         i.fitness = np.sum(i.fitness_components)
     return outer_pop
