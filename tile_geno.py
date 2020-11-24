@@ -1,5 +1,7 @@
 import numpy as np
 import pickle as pkl
+
+from flatspin import plotting
 from shapely.geometry import box
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
@@ -838,7 +840,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     return pop
 
 
-def image_match_fitness(pop, gen, outdir, target, image_file_loc, num_blocks=33, threshold=True, **flatspin_kwargs):
+def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, threshold=True, min_mags=50, **flatspin_kwargs):
     img = np.asarray(Image.open(image_file_loc))
     l = []
     step = len(img) / num_blocks
@@ -850,16 +852,27 @@ def image_match_fitness(pop, gen, outdir, target, image_file_loc, num_blocks=33,
         l.append(row)
 
     target = np.array(l)
+    target = np.flipud(target).flatten()
     if threshold:
         target = (target > (255 / 2)) * 255
 
     def fit_func(ds):
-        load_output(ds, "mag", t=-1, grid_size=num_blocks, flatten=False)  # maybe this?
+        UV = load_output(ds, "mag", t=-1, grid_size=(num_blocks,) * 2, flatten=False)
+        U = UV[..., 0]  # x components
+        V = UV[..., 1]  # y components
+        angle = plotting.vector_colors(U, V)
+        colour = np.cos(angle).flatten()
+        magn = np.linalg.norm(UV, axis=-1).flatten()
 
-        fitn = abs(len(np.unique(spin.iloc[::state_step, 1:], axis=0)) - target)
+        # scale colour by magnitude between -1 and 1
+        colour = colour * magn / np.max(magn)
+        # scale colour from 0 to 255
+        colour = (colour + 1) * (255 / 2)
+
+        fitn = np.sum(np.abs(colour - target))
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: len(x.pheno)>=min_mags,**flatspin_kwargs)
     return pop
 
 
@@ -945,7 +958,8 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_
                   "target_order_percent": target_order_percent_fitness,
                   "default": evaluate_outer,
                   "find_all": evaluate_outer_find_all,
-                  "pheno_size": pheno_size_fitness}
+                  "pheno_size": pheno_size_fitness,
+                  "image": image_match_fitness}
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 

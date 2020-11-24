@@ -154,7 +154,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True)  # debug
         # fitness_componenets should be added last due to variable column number
         for i, comp in enumerate(indv.fitness_components):
-            ind.insert(6 + i, f"fitness_component{i}", comp)
+            ind.insert(len(ind), f"fitness_component{i}", comp)
         dataset.index = dataset.index.append(ind)
 
 
