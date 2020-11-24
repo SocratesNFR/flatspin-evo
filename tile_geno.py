@@ -709,7 +709,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                                 indv.fitness_components += fit_components
                             else:
                                 indv.fitness_components = fit_components
-                        except(FileNotFoundError):  # not done saving file
+                        except:  # not done saving file
                             queue.append(ds)
                             sleep(2)
         else:
