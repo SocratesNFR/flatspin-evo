@@ -655,7 +655,7 @@ def get_default_shared_params(outdir="", gen=None):
     return default_params
 
 
-def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size):
+def get_default_run_params(pop, condition=lambda i: np.isinf(i.pheno_size) or len(i.pheno) >= i.pheno_size):
     run_params = []
     for indv in [i for i in pop if condition(i)]:
         run_params.append({"indv_id": indv.id,
@@ -665,7 +665,8 @@ def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size
 
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None,
-                  condition=lambda i: len(i.pheno) >= i.pheno_size, group_by_indv=False, **flatspin_kwargs):
+                  condition=lambda i: np.isinf(i.pheno_size) or len(i.pheno) >= i.pheno_size,
+                  group_by_indv=False, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the lists will be summed element wise
