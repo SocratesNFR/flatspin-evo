@@ -164,7 +164,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
-         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
+         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3, mut_strength=1,
          elitism=False, individual_params={}, outer_eval_params={}, evolved_params={}, stop_at_fitness=None, **kwargs):
     print("Initialising")
     for evo_p in evolved_params:
@@ -199,7 +199,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         new_kids = []
         for indv in pop:
             if np.random.rand() < mut_prob:
-                new_kids += indv.mutate()
+                new_kids += indv.mutate(mut_strength)
         # Crossover!
         print("    Crossover")
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
