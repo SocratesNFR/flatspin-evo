@@ -843,8 +843,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     return pop
 
 
-def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, threshold=True, min_mags=50,
-                        **flatspin_kwargs):
+def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, threshold=True, **flatspin_kwargs):
     img = np.asarray(Image.open(image_file_loc))
     l = []
     step = len(img) / num_blocks
@@ -876,7 +875,7 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
         fitn = np.sum(np.abs(colour - target))
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: len(x.pheno) >= min_mags, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
 
 
