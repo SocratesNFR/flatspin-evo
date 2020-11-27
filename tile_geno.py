@@ -72,7 +72,7 @@ class Individual:
                           range(np.random.randint(1, max_tiles + 1))]
         if init_pheno:
             self.pheno = self.geno2pheno(geom_size=self.pheno_size)
-            print(len(i.p))
+
 
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
