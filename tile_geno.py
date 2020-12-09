@@ -16,7 +16,7 @@ from flatspin.data import Dataset, read_table, load_output, is_archive_format
 from flatspin.grid import Grid
 from flatspin.utils import get_default_params, import_class
 from flatspin.runner import run, run_dist, run_local
-
+from flatspin.sweep import sweep
 import os
 import pandas as pd
 import shlex
@@ -72,7 +72,6 @@ class Individual:
                           range(np.random.randint(1, max_tiles + 1))]
         if init_pheno:
             self.pheno = self.geno2pheno(geom_size=self.pheno_size)
-
 
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
@@ -551,9 +550,10 @@ def centre_magnets(magnets, centre_point=(0, 0)):
 
 
 # ===================  FITNESS EVAL ========================
-def evaluate_outer(outer_pop, basepath, *, max_age=0, **kwargs):
+def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, **kwargs):
+    """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
-        i.fitness = np.sum(i.fitness_components)
+        i.fitness = acc(i.fitness_components)
     return outer_pop
 
 
@@ -656,33 +656,44 @@ def get_default_shared_params(outdir="", gen=None):
     return default_params
 
 
-def get_default_run_params(pop, condition=lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size)):
+def get_default_run_params(pop, sweep_list, *, condition=None, **kwargs):
+    sweep_list = sweep_list or [[0,0,{}]]
+
     # don't force len(pheno)=phenosize for non-finite phenosize
+    condition = condition or (lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size))
+
+    id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
+
     run_params = []
-    for indv in [i for i in pop if condition(i)]:
-        run_params.append({"indv_id": indv.id,
-                           "magnet_coords": [mag.pos for mag in indv.pheno],
-                           "magnet_angles": [mag.angle for mag in indv.pheno]})
+    for id, indv in id2indv.items():
+        for i, j, rp in sweep_list:
+            coords = [mag.pos for mag in indv.pheno]
+            angles = [mag.angle for mag in indv.pheno]
+            run_params.append(
+                dict(rp, indv_id=id, magnet_coords=coords, magnet_angles=angles, sub_run_name=f"_{i}_{j}"))
+
     return run_params
 
 
-def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None,
+def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, sweep_list=None,
                   condition=lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size),
                   group_by_indv=False, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
-    if an Individual already has fitness components the lists will be summed element wise
+    if an Individual already has fitness components the value(s) will be appended
     (allows for multiple datasets per Individual)
     """
     if len(pop) < 1:
         return pop
-    if run_params is None:
-        run_params = get_default_run_params(pop, condition)
+
     default_shared = get_default_shared_params(outdir, gen)
     if shared_params is not None:
         default_shared.update(shared_params)
     shared_params = default_shared
     shared_params.update(flatspin_kwargs)
+
+    if run_params is None:
+        run_params = get_default_run_params(pop, sweep_list, condition=condition)
 
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
@@ -774,7 +785,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
         if evolved_params:
             # get any flatspin params in evolved_params and update run param with them
             run_params.update({k: v for k, v in evolved_params[i].items() if k in newparams})
-        sub_run_name = newparams["sub_run_name"] if "sub_run_name" in newparams else "x"
+        sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
         row = OrderedDict(run_params)
@@ -800,24 +811,27 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
     return
 
 
-def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], **flatspin_kwargs):
+def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], sweep_list=None, **flatspin_kwargs):
     shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
 
-    run_params = get_default_run_params(pop)
+    run_params = get_default_run_params(pop, sweep_list, condition=flatspin_kwargs.get("condition"))
     frac_run_params = []
     if len(run_params) > 0:
         for rp in run_params:
-            rp["sub_run_name"] = f"frac{1}"
+            rp.setdefault("sub_run_name", "")
+
             for frac in other_sizes_fractions:
                 angles_frac = rp["magnet_angles"][:int(np.ceil(len(rp["magnet_angles"]) * frac))]
                 coords_frac = rp["magnet_coords"][:int(np.ceil(len(rp["magnet_coords"]) * frac))]
-                frac_run_params.append({"indv_id": rp["indv_id"],
-                                        "magnet_coords": coords_frac,
-                                        "magnet_angles": angles_frac,
-                                        "sub_run_name": f"frac{frac}"})
+                frp = {"indv_id": rp["indv_id"],
+                        "magnet_coords": coords_frac,
+                        "magnet_angles": angles_frac,
+                        "sub_run_name": rp["sub_run_name"] + f"_frac{frac}"}
+                frac_run_params.append(dict(rp, **frp))
+            rp["sub_run_name"] += f"_frac{1}"
 
     def fit_func(ds):
         # fitness is number of steps, but ignores steps from first fifth of the run
@@ -984,8 +998,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **flatspin_kwarg
     return pop
 
 
-def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_params={},
-         outer_eval_params={}, evolved_params={}, minimize_fitness=True, **kwargs):
+def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, **kwargs):
     known_fits = {"target_state_num": target_state_num_fitness,
                   "state_num": state_num_fitness,
                   "flips": flips_fitness,
@@ -1001,8 +1014,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", individual_
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 
-    return ea.main(outdir, Individual, inner, outer, minimize_fitness, individual_params=individual_params,
-                   outer_eval_params=outer_eval_params, evolved_params=evolved_params, **kwargs)
+    return ea.main(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -1017,7 +1029,9 @@ if __name__ == '__main__':
                         help=r'¯\_(ツ)_/¯')
     parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={},
                         help="param passed to flatspin and inner evaluate fitness function")
-    parser.add_argument('-e', '--evolved_params', action=StoreKeyValue, default={},
+    parser.add_argument('-s', '--sweep_param', action=StoreKeyValue, default={},
+                        help="flatspin param to be swept on each Individual evaluation")
+    parser.add_argument('-e', '--evolved_param', action=StoreKeyValue, default={},
                         help="param passed to flatspin and inner evaluate that is under evolutionary control, format: [param_name, low, high] or [param_name, low, high, shape*]")
     parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={},
                         help="param passed to Individual constructor")
@@ -1026,6 +1040,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    main(outdir=args.output, **eval_params(args.parameter), evolved_params=eval_params(args.evolved_params),
+    main(outdir=args.output, **eval_params(args.parameter), evolved_params=eval_params(args.evolved_param),
          individual_params=eval_params(args.individual_param),
-         outer_eval_params=eval_params(args.outer_eval_param))
+         outer_eval_params=eval_params(args.outer_eval_param), sweep_params=args.sweep_param)
