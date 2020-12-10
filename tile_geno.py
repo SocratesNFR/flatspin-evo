@@ -677,7 +677,7 @@ def get_default_run_params(pop, sweep_list, *, condition=None, **kwargs):
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, sweep_list=None,
                   condition=lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size),
-                  group_by_indv=False, **flatspin_kwargs):
+                  **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -698,46 +698,30 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
         evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
-        evo_run(run_params, shared_params, gen, evolved_params, wait=group_by_indv)
+        evo_run(run_params, shared_params, gen, evolved_params)
 
         datasets = Dataset.read(shared_params["basepath"])
-        if not group_by_indv:
-            queue = list(datasets)
-            while len(queue) > 0:
-                ds = queue.pop(0)
-                if not os.path.exists(os.path.join(shared_params["basepath"], ds.index["outdir"].iloc[0])):
-                    queue.append(ds)  # if file not exist yet add it to the end and check next
-                else:
-                    with np.errstate(all='ignore'):
-                        try:
-                            # calculate fitness of a dataset
-                            fit_components = fit_func(ds)
-                            try:
-                                fit_components = list(fit_components)
-                            except(TypeError):
-                                fit_components = [fit_components]
-
-                            # assign the fitness of the correct individual
-                            indv = id2indv[ds.index["indv_id"].values[0]]
-                            if indv.fitness_components is not None:
-                                indv.fitness_components += fit_components
-                            else:
-                                indv.fitness_components = fit_components
-                        except:  # not done saving file
-                            queue.append(ds)
-                            sleep(2)
-        else:
-            group = datasets.groupby("indv_id")
-            for id, ds in group:
+        queue = list(datasets.groupby("indv_id"))
+        while len(queue) > 0:
+            indv_id, ds = queue.pop(0)
+            with np.errstate(all='ignore'):
                 try:
-                    fit_components = list(fit_components)
-                except(TypeError):
-                    fit_components = [fit_components]
-                indv = id2indv[id]
-                if indv.fitness_components is not None:
-                    indv.fitness_components += fit_components
-                else:
-                    indv.fitness_components = fit_components
+                    # calculate fitness of a dataset
+                    fit_components = fit_func(ds)
+                    try:
+                        fit_components = list(fit_components)
+                    except(TypeError):
+                        fit_components = [fit_components]
+
+                    # assign the fitness of the correct individual
+                    indv = id2indv[indv_id]
+                    if indv.fitness_components is not None:
+                        indv.fitness_components += fit_components
+                    else:
+                        indv.fitness_components = fit_components
+                except:  # not done saving file
+                    queue.append((indv_id, ds))
+                    sleep(2)
 
     for indv in [i for i in pop if not condition(i)]:
         indv.fitness_components = [np.nan]
