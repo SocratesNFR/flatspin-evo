@@ -1,3 +1,4 @@
+# vim: tw=120
 import numpy as np
 import pickle as pkl
 
