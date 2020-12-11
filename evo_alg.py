@@ -164,8 +164,10 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
-         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3, mut_strength=1,
-         elitism=False, individual_params={}, outer_eval_params={}, evolved_params={}, sweep_params={}, stop_at_fitness=None, **kwargs):
+         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
+         mut_strength=1, elitism=False, individual_params={},
+         outer_eval_params={}, evolved_params={}, sweep_params={},
+         stop_at_fitness=None, group_by=None, **kwargs):
 
     check_args =np.unique(list(evolved_params) + list(kwargs) + list(sweep_params),return_counts=True)
     check_args =[check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
@@ -182,7 +184,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
     sweep_list =list(sweep(sweep_params,params=kwargs)) if sweep_params else []
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    pop = evaluate_outer(evaluate_inner(pop, 0, outdir,sweep_list=sweep_list, **kwargs), basepath=outdir, **outer_eval_params)
+    pop = evaluate_inner(pop, 0, outdir, sweep_list=sweep_list, group_by=group_by, **kwargs)
+    pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
     gen_times = []
 
     index = pd.DataFrame()
@@ -218,7 +221,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
             # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir,sweep_list=sweep_list, **kwargs))
+        pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_list=sweep_list, group_by=group_by, **kwargs))
         pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
 
         # Select
