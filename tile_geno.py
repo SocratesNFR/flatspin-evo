@@ -1019,6 +1019,10 @@ if __name__ == '__main__':
                         help="param passed to flatspin and inner evaluate fitness function")
     parser.add_argument('-s', '--sweep_param', action=StoreKeyValue, default={},
                         help="flatspin param to be swept on each Individual evaluation")
+    parser.add_argument('-n', '--repeat', type=int, default=1, metavar='N',
+                        help='repeat each flatspin run N times (default: %(default)s)')
+    parser.add_argument('-ns', '--repeat-spec', action=StoreKeyValue, metavar='key=SPEC',
+                        help='repeat each flatspin run according to key=SPEC')
     parser.add_argument('-e', '--evolved_param', action=StoreKeyValue, default={},
                         help="param passed to flatspin and inner evaluate that is under evolutionary control, format: [param_name, low, high] or [param_name, low, high, shape*]")
     parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={},
@@ -1033,4 +1037,5 @@ if __name__ == '__main__':
     main(outdir=args.output, **eval_params(args.parameter), evolved_params=eval_params(args.evolved_param),
          individual_params=eval_params(args.individual_param),
          outer_eval_params=eval_params(args.outer_eval_param),
-         sweep_params=args.sweep_param, group_by=args.group_by)
+         sweep_params=args.sweep_param, repeat=args.repeat,
+         repeat_spec=args.repeat_spec, group_by=args.group_by)
