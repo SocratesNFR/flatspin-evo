@@ -185,8 +185,8 @@ class Individual:
                              blit=False, interval=interval)
 
     @staticmethod
-    def print_mags(mags, facecolor=None, edgecolor=None):
-        plt.figure()
+    def print_mags(mags, facecolor=None, edgecolor=None, **kwargs):
+        #plt.figure()
         for mag in mags:
             patch = mag.as_patch()
             if facecolor:
@@ -709,6 +709,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
         while len(queue) > 0:
             ds = queue.pop(0)
             with np.errstate(all='ignore'):
+                indv_id = ds.index["indv_id"].values[0]
                 try:
                     # calculate fitness of a dataset
                     fit_components = fit_func(ds)
@@ -718,7 +719,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                         fit_components = [fit_components]
 
                     # assign the fitness of the correct individual
-                    indv_id = ds.index["indv_id"].values[0]
+
                     indv = id2indv[indv_id]
                     if indv.fitness_components is not None:
                         indv.fitness_components += fit_components
