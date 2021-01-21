@@ -726,7 +726,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                     else:
                         indv.fitness_components = fit_components
                 except:  # not done saving file
-                    queue.append((indv_id, ds))
+                    queue.append(ds) # queue.append((indv_id, ds))
                     sleep(2)
 
     for indv in [i for i in pop if not condition(i)]:
