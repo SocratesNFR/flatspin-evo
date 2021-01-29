@@ -678,7 +678,7 @@ def get_default_run_params(pop, sweep_list, *, condition=None, **kwargs):
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, sweep_list=None,
                   condition=lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size),
-                  group_by=None, **flatspin_kwargs):
+                  group_by=None, max_jobs=1000, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -699,7 +699,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
         evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
-        evo_run(run_params, shared_params, gen, evolved_params)
+        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs)
 
         dataset = Dataset.read(shared_params["basepath"])
         queue = dataset
@@ -734,7 +734,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     return pop
 
 
-def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
+def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False, max_jobs=1000):
     """ modified from run_sweep.py main()"""
     model_name = shared_params.pop("model", "generated")
     model_class = import_class(model_name, 'flatspin.model')
@@ -795,7 +795,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False):
         run_local(dataset, False)
 
     elif run_type == 'dist':
-        run_dist(dataset, wait=wait)
+        run_dist(dataset, wait=wait, max_jobs=max_jobs)
 
     np.random.set_state(rs)
     return
