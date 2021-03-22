@@ -77,6 +77,9 @@ class Individual:
 
     def refresh(self):
         self.pheno = self.geno2pheno(geom_size=self.pheno_size)
+        self.clear_fitness()
+
+    def clear_fitness(self):
         self.fitness = None
         self.fitness_components = None
 
@@ -854,10 +857,10 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
 def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], **flatspin_kwargs):
     if "test_perc" in sweep_params:
         warnings.warn("majority fitness function overwriting value of 'test_perc'")
-    sweep_params["test_perc"] = str(test_at)
+
     if "random_prob" in sweep_params:
         warnings.warn("majority fitness function overwriting value of 'random_prob'")
-    sweep_params["random_prob"] = "[test_perc]"
+    sweep_params = dict(sweep_params, test_perc=str(test_at), random_prob="[test_perc]")
 
     def preprocessing(run_params):
         """mod angles, enforce odd number of spins"""

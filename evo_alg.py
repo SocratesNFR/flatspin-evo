@@ -169,7 +169,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         mut_strength=1, elitism=False, individual_params={},
+         mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={},
          sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None, **kwargs):
     check_args = np.unique(list(evolved_params) + list(kwargs) + list(sweep_params), return_counts=True)
@@ -185,8 +185,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
-    #sweep_list moved to flatspin_eval
-    #sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
+    # sweep_list moved to flatspin_eval
+    # sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
@@ -225,7 +225,12 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
             # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs))
+        if reval_inner: #do we re-evealuate all inner fitnesses?
+            pop.extend(new_kids)
+            list(map(individual_class.clear_fitness, pop)) #clear fitness and fitness componenets
+            evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+        else:
+            pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs))
         pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
 
         # Select
