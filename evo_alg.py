@@ -16,6 +16,7 @@ from flatspin.data import Dataset, is_archive_format
 from flatspin.utils import get_default_params, import_class
 from flatspin.sweep import sweep
 
+
 def rainbow_colours(num):
     cmap = plt.get_cmap('gist_rainbow')
     return cmap(np.linspace(0, 1, num))
@@ -83,16 +84,20 @@ def fittest_select(pop, pop_size, minimize_fit):
 def parse_file(filename):
     with open(filename) as f:
         lines = f.readlines()
-    assert len(lines) % 3 == 0
+    # assert len(lines) % 3 == 0
     results = []
-    for gen in range(0, len(lines), 3):
+
+    for gen in range(0, len(lines)):
+        d = {}
+        """
         d = {k.strip(): v.strip() for k, v in [keyval.split(":") for keyval in lines[gen].split(";")]}
         for k in d:
             if "," in d[k]:
                 d[k] = float(d[k].strip("][").split(","))
             else:
                 d[k] = float(d[k].strip("]["))
-        d["bestIndv"] = lines[gen + 2].strip()
+        """
+        d = lines[gen].strip()
         results.append(d)
     return results
 
@@ -158,8 +163,6 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
             ind.insert(len(ind.columns), f"fitness_component{i}", comp)
         dataset.index = dataset.index.append(ind)
 
-
-
         if not dataset.params:
             dataset.params = ds.params
 
@@ -168,11 +171,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={},
-         sweep_params={}, repeat=1, repeat_spec=None,
-         stop_at_fitness=None, group_by=None, **kwargs):
-
-    check_args =np.unique(list(evolved_params) + list(kwargs) + list(sweep_params),return_counts=True)
-    check_args =[check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
+         sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None, **kwargs):
+    check_args = np.unique(list(evolved_params) + list(kwargs) + list(sweep_params), return_counts=True)
+    check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
     if check_args:
         raise RuntimeError(f"param '{check_args[0]}' appears in multiple param groups")
     print("Initialising")
@@ -184,9 +185,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
-    sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
+    #sweep_list moved to flatspin_eval
+    #sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    pop = evaluate_inner(pop, 0, outdir, sweep_list=sweep_list, group_by=group_by, **kwargs)
+    pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
     gen_times = []
 
@@ -223,7 +225,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
             # Eval
         print("    Evaluate")
-        pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_list=sweep_list, group_by=group_by, **kwargs))
+        pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs))
         pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
 
         # Select
