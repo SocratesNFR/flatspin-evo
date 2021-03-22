@@ -866,7 +866,7 @@ def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], *
         """mod angles, enforce odd number of spins"""
         for run in run_params:
             run["magnet_angles"] %= np.pi
-            if len(run["magnet_angles"] % 2 == 0):
+            if len(run["magnet_angles"]) % 2 == 0:
                 run["magnet_angles"] = run["magnet_angles"][:-1]
                 run["magnet_coords"] = run["magnet_coords"][:-1]
                 run["random_seed"] = np.random.randint(999999)
