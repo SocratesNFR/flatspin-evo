@@ -869,7 +869,7 @@ def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], *
             if len(run["magnet_angles"]) % 2 == 0:
                 run["magnet_angles"] = run["magnet_angles"][:-1]
                 run["magnet_coords"] = run["magnet_coords"][:-1]
-                run["random_seed"] = np.random.randint(999999)
+            run["random_seed"] = np.random.randint(999999)
         return run_params
 
     def fit_func(ds):
