@@ -854,7 +854,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     return pop
 
 
-def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], **flatspin_kwargs):
+def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], match=True, **flatspin_kwargs):
     if "test_perc" in sweep_params:
         warnings.warn("majority fitness function overwriting value of 'test_perc'")
 
@@ -875,7 +875,10 @@ def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], *
     def fit_func(ds):
         spin = read_table(ds.tablefile("spin"))
         majority_symbol = spin.iloc[0].mode()[0]
-        fitn = np.sum(spin.iloc[-1] == majority_symbol)
+        if match:
+            fitn = np.sum(spin.iloc[-1] == majority_symbol)
+        else:
+            fitn = np.sum(spin.iloc[-1] != majority_symbol)
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, preprocessing=preprocessing, init="random",
