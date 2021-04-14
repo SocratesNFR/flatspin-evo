@@ -39,7 +39,7 @@ class Individual:
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
                  pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
-                 tiles=None, init_pheno=True, evolved_params_values={}, **kwargs):
+                 tiles=None, init_pheno=True, evolved_params_values={}, fixed_geom=False, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -51,6 +51,7 @@ class Individual:
         self.max_symbol = max_symbol
         self.pheno_size = pheno_size
         self.pheno_bounds = pheno_bounds
+        self.fixed_geom = fixed_geom
         if self.pheno_bounds and np.isscalar(pheno_bounds):
             self.pheno_bounds = [pheno_bounds] * 2
         self.fitness = fitness
@@ -62,21 +63,22 @@ class Individual:
                 self.evolved_params_values[param] = np.random.uniform(Individual._evolved_params[param]["low"],
                                                                       Individual._evolved_params[param]["high"],
                                                                       Individual._evolved_params[param].get("shape"))
-
-        if mag_h > mag_w:
-            raise Warning("conversion to flatspin assumes magnet height < magnet width!")
-        if tiles is not None and 1 <= len(tiles):
-            if len(tiles) > self.max_tiles:
-                raise ValueError("Individual has more tiles than the value of 'max_tiles'")
-            self.tiles = tiles
-        else:
-            self.tiles = [Tile(mag_w=mag_w, mag_h=mag_h, tile_size=tile_size, max_symbol=max_symbol) for _ in
-                          range(np.random.randint(1, max_tiles + 1))]
-        if init_pheno:
-            self.pheno = self.geno2pheno(geom_size=self.pheno_size)
+        if not self.fixed_geom:
+            if mag_h > mag_w:
+                raise Warning("conversion to flatspin assumes magnet height < magnet width!")
+            if tiles is not None and 1 <= len(tiles):
+                if len(tiles) > self.max_tiles:
+                    raise ValueError("Individual has more tiles than the value of 'max_tiles'")
+                self.tiles = tiles
+            else:
+                self.tiles = [Tile(mag_w=mag_w, mag_h=mag_h, tile_size=tile_size, max_symbol=max_symbol) for _ in
+                              range(np.random.randint(1, max_tiles + 1))]
+            if init_pheno:
+                self.pheno = self.geno2pheno(geom_size=self.pheno_size)
 
     def refresh(self):
-        self.pheno = self.geno2pheno(geom_size=self.pheno_size)
+        if not self.fixed_geom:
+            self.pheno = self.geno2pheno(geom_size=self.pheno_size)
         self.clear_fitness()
 
     def clear_fitness(self):
@@ -85,18 +87,20 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes are ignored by repr
-        ignore_attributes = ("pheno")
+        ignore_attributes = ("pheno",)
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
     def copy(self, **overide_kwargs):
         # defines which attributes are used when copying
+        # somre params are ignored as need to be deep copied
         ignore_attributes = ("gen", "evolved_params_values", "pheno", "id", "init_pheno")
         params = {k: v for (k, v) in vars(self).items() if k not in ignore_attributes}
         params.update(overide_kwargs)
         new_indv = Individual(**params)
         new_indv.evolved_params_values = deepcopy(new_indv.evolved_params_values)
         # copy attributes that are referenced to unlink
-        new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
+        if not new_indv.fixed_geom:
+            new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
 
         return new_indv
 
@@ -105,8 +109,10 @@ class Individual:
         array = np.array
         inf = np.inf
         params = eval(s)
-        # Instanciate Magnets from result of repr
-        params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
+
+        if not params.get("fixed_geom", False):
+            # Instanciate Magnets from result of repr
+            params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
         return Individual(**params)
 
     def geno2pheno(self, geom_size=40, animate=False, no_change_terminator=1):
@@ -211,11 +217,16 @@ class Individual:
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy(init_pheno=False)
-        mut_types = ["magPos", "magAngle", "symbol", "tile"]
+        mut_types = []  # valid mutations for individual
+        if not self.fixed_geom:
+            mut_types += ["magPos", "magAngle", "symbol"]
+            if self.max_tiles > 1:
+                mut_types += ["tile"]  # cannot add/remove tiles when max tile is 1
+
         if len(self.evolved_params_values) > 0:
-            mut_types.append("param")
-        if self.max_tiles == 1:
-            mut_types.remove("tile")  # cannot add/remove tiles when max tile is 1
+            mut_types += ["param"]
+
+        assert len(mut_types) > 0, "no mutations valid for this individual"
         mut_type = np.random.choice(mut_types)
 
         if mut_type == "magPos":
@@ -298,6 +309,7 @@ class Individual:
         return [self.tiles[i] for i in list(np.random.choice(range(len(self.tiles)), size=num, replace=replace))]
 
     def crossover(self, other):
+        assert not self.fixed_geom, "crossover not implemented for fixed geom, use -p cx_prob=0"
         """crossover 2 individuls, return any new children as a list """
         if len(self.tiles) == 1 and len(other.tiles) == 1:
             # if both parents have 1 tile, cross over the angle and positions
@@ -672,8 +684,8 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
     run_params = []
     for id, indv in id2indv.items():
         for i, j, rp in sweep_list:
-            coords = np.array([mag.pos for mag in indv.pheno])
-            angles = np.array([mag.angle for mag in indv.pheno])
+            coords = np.array([mag.pos for mag in indv.pheno]) if not indv.fixed_geom else [0]
+            angles = np.array([mag.angle for mag in indv.pheno]) if not indv.fixed_geom else [0]
             run_params.append(
                 dict(rp, indv_id=id, magnet_coords=coords, magnet_angles=angles, sub_run_name=f"_{i}_{j}"))
 
@@ -743,7 +755,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
 
 def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False, max_jobs=1000):
     """ modified from run_sweep.py main()"""
-    model_name = shared_params.pop("model", "generated")
+    model_name = shared_params.pop("model", "CustomSpinIce")
     model_class = import_class(model_name, 'flatspin.model')
     encoder_name = shared_params.get("encoder", "Sine")
     encoder_class = import_class(encoder_name, 'flatspin.encoder')
