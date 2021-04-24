@@ -27,6 +27,7 @@ import sys
 from matplotlib import pyplot as plt
 from matplotlib import patches
 from matplotlib.animation import FuncAnimation, writers
+import logging
 
 
 class Individual:
@@ -218,136 +219,199 @@ class Individual:
         """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy(init_pheno=False)
         mut_types = []  # valid mutations for individual
-        if not self.fixed_geom:
-            mut_types += ["magPos", "magAngle", "symbol"]
-            if self.max_tiles > 1:
-                mut_types += ["tile"]  # cannot add/remove tiles when max tile is 1
 
+        if not clone.fixed_geom:
+            mut_types += [Individual.mutate_magnet_pos, Individual.mutate_magnet_angle, Individual.mutate_symbol]
+            if clone.max_tiles > 1:  # cannot add/remove tiles when max tile is 1
+                if len(clone.tiles) < clone.max_tiles:  # only add new tiles when less than max
+                    mut_types += [Individual.mutate_clone_tile, Individual.mutate_add_rand_tile]
+                if len(clone.tiles) > 1:  # only remove tile when more than 1
+                    mut_types += [Individual.mutate_delete_tile]
+
+        weights = [1] * len(mut_types)  # uniform weights
         if len(self.evolved_params_values) > 0:
-            mut_types += ["param"]
+            mut_types += [Individual.mutate_evo_param]
+            # increase chance of selecting param-mutation by the num of evo params so they are picked evenly
+            weights += [len(self.evolved_params_values)]
 
         assert len(mut_types) > 0, "no mutations valid for this individual"
-        mut_type = np.random.choice(mut_types)
+        weights = np.array(weights) / np.sum(weights)  # normalise weights
+        mutation = np.random.choice(mut_types, p=weights)
+        mut_info = mutation(clone, strength)
 
-        if mut_type == "magPos":
-            # pick a tile at random, pick a magnet excluding the first magnet
-            # and move it (only position of magnet center is confined by tile_size)
-            tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
-            x = 1 + np.random.randint(len(tile[1:]))
-            copy_mag = tile[x].copy()
-            distance = Individual.gauss_mutate(copy_mag.pos, strength * self.tile_size / 200, 0,
-                                               clone.tile_size) - copy_mag.pos
-            copy_mag.i_translate(*distance)
-
-            if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
-                # only mutate if does not cause overlap
-                tile.locked = False
-                tile[x] = copy_mag
-                tile.locked = True
-            else:
-                # return nothing, mutation failed
-                return []
-
-        elif mut_type == "magAngle":
-            # pick a tile at random, pick a magnet excluding the first magnet and rotate it (about centroid)
-            tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
-            x = 1 + np.random.randint(len(tile[1:]))
-            copy_mag = tile[x].copy()
-            rotation = np.random.normal(0, strength * (2 * np.pi) / 200)
-            copy_mag.i_rotate(rotation, "centroid")
-
-            if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
-                # only mutate if does not cause overlap
-                tile.locked = False
-                tile[x] = copy_mag
-                tile.locked = True
-            else:
-                # return nothing, mutation failed
-                return []
-
-        elif mut_type == "symbol":
-            tile = clone.random_tiles()[0]
-            magnet = np.random.choice(tile)
-            magnet.symbol = np.random.randint(clone.max_symbol, size=2)
-
-        elif mut_type == "tile":
-            if len(clone.tiles) == 1:  # if just one don't allow deletion of tile
-                mut_types = ["clone tile", "add random tile"]
-            # if at max tiles only allow deletion
-            elif clone.max_tiles == len(clone.tiles):
-                mut_types = ["delete tile"]
-
-            else:
-                mut_types = ["clone tile", "delete tile", "add random tile"]
-
-            mut_type = np.random.choice(mut_types)
-            if mut_type == "delete tile":
-                clone.tiles.remove(clone.random_tiles()[0])
-
-            elif mut_type == "clone tile":
-                clone.tiles.append(clone.random_tiles()[0].copy())
-
-            elif mut_type == "add random tile":
-                clone.tiles.append(
-                    Tile(mag_w=self.mag_w, mag_h=self.mag_h, tile_size=self.tile_size, max_symbol=self.max_symbol))
-            else:
-                raise (Exception("unhandled mutation type"))
-
-        elif mut_type == "param":
-            param_name = np.random.choice(list(self.evolved_params_values))
-            mut_param_info = Individual._evolved_params[param_name]
-            new_val = Individual.gauss_mutate(self.evolved_params_values[param_name],
-                                              strength * (mut_param_info["high"] - mut_param_info["low"]) / 200)
-            clone.evolved_params_values[param_name] = new_val
+        if clone:
+            clone.age = 0
+            clone.refresh()
+            logging.info(f"ind {clone.id} created from {mutation.__name__} on ind {self.id} info: {mut_info}")
         else:
-            raise (Exception("unhandled mutation type"))
-        clone.age = 0
-        clone.refresh()
+            logging.info(f"Failed mutation: {mutation.__name__} on ind {self.id} info: {mut_info}")
         return [clone]
 
     def random_tiles(self, num=1, replace=False):
         return [self.tiles[i] for i in list(np.random.choice(range(len(self.tiles)), size=num, replace=replace))]
 
     def crossover(self, other):
-        assert not self.fixed_geom, "crossover not implemented for fixed geom, use -p cx_prob=0"
         """crossover 2 individuls, return any new children as a list """
-        if len(self.tiles) == 1 and len(other.tiles) == 1:
-            # if both parents have 1 tile, cross over the angle and positions
-            # of the magnets
-            parents = [self, other]
-            np.random.shuffle(parents)
+        assert not (self.fixed_geom and len(self.evolved_params_values) < 1), "no free values to crossover"
 
-            child = parents[0].copy(init_pheno=False)
-            for i in range(1, len(child.tiles[0])):  # probably just [1]
-                angles = (parents[0].tiles[0][i].angle, parents[1].tiles[0][i].angle)
-                poss = (parents[0].tiles[0][i].pos, parents[1].tiles[0][i].pos)
-
-                new_angle = np.random.rand() * np.abs(angles[0] - angles[1]) + min(angles)
-                new_pos = np.random.rand() * np.abs(poss[0] - poss[1]) + np.min(poss, axis=0)
-
-                rot = new_angle - child.tiles[0][i].angle
-                child.tiles[0][i].i_rotate(rot, "centroid")
-
-                translate = new_pos - child.tiles[0][i].pos
-                child.tiles[0][i].i_translate(*translate)
-
-            if Magnet.any_intersecting(child.tiles[0]):  # crossover failed
-                return []
+        parents = [self, other]
+        np.random.shuffle(parents)
+        if not self.fixed_geom:
+            # if both parents have 1 tile, cross over the angle and positions of the magnets
+            if len(self.tiles) == len(other.tiles) == 1:
+                cx = Individual.crossover_single_tile
+            else:
+                cx = Individual.crossover_tiles
+            child = cx(parents)
         else:
-            num_tiles = (len(self.tiles), len(other.tiles))
-            num_tiles = min(self.max_tiles, np.random.randint(min(num_tiles), max(num_tiles) + 1))
+            child = parents[0].copy()
 
-            from_first_parent = np.random.randint(0, num_tiles + 1)
-            tiles = self.random_tiles(num=min(from_first_parent, len(self.tiles)))
-            tiles += other.random_tiles(num=min(num_tiles - from_first_parent, len(other.tiles)))
+        evo_params_info = ""
+        if child:
+            if len(self.evolved_params_values) > 0:
+                child.evolved_params_values = Individual.crossover_evo_params(parents)
+                evo_params_info = f"and {Individual.crossover_evo_params.__name__} "
+        if child:
+            child.age = 0
+            child.refresh()
+            logging.info(
+                f"ind {child.id} created from {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+        else:
+            logging.info(f"Failed crossover: {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
 
-            tiles = [tile.copy() for tile in tiles]
-            child = self.copy()
-            child.tiles = tiles
+        return [child] if child else []
 
-        child.age = 0
-        child.refresh()
-        return [child]
+    @staticmethod
+    def crossover_single_tile(parents):
+        """is affected by order of parents (shuffle before calling)"""
+        child = parents[0].copy(init_pheno=False)
+        for i in range(1, len(child.tiles[0])):  # probably just [1]
+            angles = (parents[0].tiles[0][i].angle, parents[1].tiles[0][i].angle)
+            poss = (parents[0].tiles[0][i].pos, parents[1].tiles[0][i].pos)
+
+            new_angle = np.random.rand() * np.abs(angles[0] - angles[1]) + min(angles)
+            new_pos = np.random.rand() * np.abs(poss[0] - poss[1]) + np.min(poss, axis=0)
+
+            rot = new_angle - child.tiles[0][i].angle
+            child.tiles[0][i].i_rotate(rot, "centroid")
+
+            translate = new_pos - child.tiles[0][i].pos
+            child.tiles[0][i].i_translate(*translate)
+
+        if Magnet.any_intersecting(child.tiles[0]):  # crossover failed
+            child = None
+        return child
+
+    @staticmethod
+    def crossover_tiles(parents):
+        num_tiles = (len(parents[0].tiles), len(parents[1].tiles))
+        num_tiles = min(parents[0].max_tiles, np.random.randint(min(num_tiles), max(num_tiles) + 1))
+
+        from_first_parent = np.random.randint(0, num_tiles + 1)
+        tiles = parents[0].random_tiles(num=min(from_first_parent, len(parents[0].tiles)))
+        tiles += parents[1].random_tiles(num=min(num_tiles - from_first_parent, len(parents[1].tiles)))
+
+        tiles = [tile.copy() for tile in tiles]
+        child = parents[0].copy()
+        child.tiles = tiles
+        return child
+
+    @staticmethod
+    def crossover_evo_params(parents):
+        """return new dict of evo params from randomly choosing between params of each parent"""
+        evo_params = deepcopy(parents[0].evolved_params_values)
+        for param, rnd in zip(evo_params, np.random.random(len(evo_params))):
+            if rnd > 0.5:
+                evo_params[param] = deepcopy(parents[1].evolved_params_values[param])
+        return evo_params
+
+    @staticmethod
+    def mutate_magnet_pos(clone, strength):
+        # pick a tile at random, pick a magnet excluding the first magnet
+        # and move it (only position of magnet center is confined by tile_size)
+        tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
+        x = 1 + np.random.randint(len(tile[1:]))
+        copy_mag = tile[x].copy()
+        distance = Individual.gauss_mutate(copy_mag.pos, strength * clone.tile_size / 200, 0,
+                                           clone.tile_size) - copy_mag.pos
+        old_pos = copy_mag.pos.tolist()
+        copy_mag.i_translate(*distance)
+
+        if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
+            # only mutate if does not cause overlap
+            tile.locked = False
+            tile[x] = copy_mag
+            tile.locked = True
+        else:
+            # mutation failed, terminate clone!
+            clone = None
+        return f"moved mag {old_pos} -> {copy_mag.pos.tolist()}"
+
+    @staticmethod
+    def mutate_magnet_angle(clone, strength):
+        # pick a tile at random, pick a magnet excluding the first magnet and rotate it (about centroid)
+        tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
+        x = 1 + np.random.randint(len(tile[1:]))
+        copy_mag = tile[x].copy()
+        old_angle = copy_mag.angle
+        rotation = np.random.normal(0, strength * (2 * np.pi) / 200)
+        copy_mag.i_rotate(rotation, "centroid")
+
+        if not copy_mag.is_intersecting(tile[:x] + tile[x + 1:]):
+            # only mutate if does not cause overlap
+            tile.locked = False
+            tile[x] = copy_mag
+            tile.locked = True
+        else:
+            # mutation failed, terminate clone!
+            clone = None
+        return f"rotated mag {old_angle} -> {copy_mag.angle}"
+
+    @staticmethod
+    def mutate_symbol(clone, strength):
+        tile = clone.random_tiles()[0]
+        magnet = np.random.choice(tile)
+        old_sym = magnet.symbol.copy()
+        magnet.symbol = np.random.randint(clone.max_symbol, size=2)
+        if all(old_sym == magnet.symbol):
+            # mutation failed, terminate clone!
+            clone = None
+
+        return f"symbol changed {old_sym.tolist()} -> {magnet.symbol.tolist()}"
+
+    @staticmethod
+    def mutate_clone_tile(clone, strength):
+        clone.tiles.append(clone.random_tiles()[0].copy())
+        return f"cloned 1 tile"
+
+    @staticmethod
+    def mutate_delete_tile(clone, strength):
+        clone.tiles.remove(clone.random_tiles()[0])
+        return f"deleted 1 tile"
+
+    @staticmethod
+    def mutate_add_rand_tile(clone, strength):
+        clone.tiles.append(
+            Tile(mag_w=clone.mag_w, mag_h=clone.mag_h, tile_size=clone.tile_size, max_symbol=clone.max_symbol))
+        return f"added 1 random tile"
+
+    @staticmethod
+    def mutate_evo_param(clone, strength):
+        param_name = np.random.choice(list(clone.evolved_params_values))
+        mut_param_info = Individual._evolved_params[param_name]
+
+        new_val = Individual.gauss_mutate(clone.evolved_params_values[param_name],
+                                          strength * (mut_param_info["high"] - mut_param_info["low"]) / 200)
+
+        res_info = f"{param_name} changed {clone.evolved_params_values[param_name]} -> {new_val}"
+
+        if new_val == clone.evolved_params_values[param_name]:
+            # mutation failed, terminate clone!
+            clone = None
+        else:
+            clone.evolved_params_values[param_name] = new_val
+
+        return res_info
 
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
@@ -744,7 +808,9 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                         indv.fitness_components += fit_components
                     else:
                         indv.fitness_components = fit_components
-                except:  # not done saving file
+                except Exception as e:  # not done saving file
+                    if shared_params["run"] != "dist":
+                        raise e
                     queue.append(ds)  # queue.append((indv_id, ds))
                     sleep(2)
 
@@ -1079,17 +1145,24 @@ if __name__ == '__main__':
     parser.add_argument('-ns', '--repeat-spec', action=StoreKeyValue, metavar='key=SPEC',
                         help='repeat each flatspin run according to key=SPEC')
     parser.add_argument('-e', '--evolved_param', action=StoreKeyValue, default={},
-                        help="param passed to flatspin and inner evaluate that is under evolutionary control, format: -e param_name=[low, high] or -e param_name=[low, high, shape*]")
+                        help="""param passed to flatspin and inner evaluate that is under evolutionary control, format: -e param_name=[low, high] or -e param_name=[low, high, shape*]
+                                int only values not supported""")
+    parser.add_argument('--evo-rotate', action='store_true', help='short hand for "-e initial_rotation=[0,2*np.pi]"')
     parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={},
                         help="param passed to Individual constructor")
     parser.add_argument('-f', '--outer_eval_param', action=StoreKeyValue, default={},
-                        help="param past to outer evlauate fitness function")
+                        help="param past to outer evaluate fitness function")
     parser.add_argument('--group-by', nargs='*',
                         help='group by parameter(s) for fitness evaluation')
 
     args = parser.parse_args()
 
-    main(outdir=args.output, **eval_params(args.parameter), evolved_params=eval_params(args.evolved_param),
+    evolved_params = eval_params(args.evolved_param)
+    if args.evo_rotate:
+        evolved_params["initial_rotation"] = [0, 2 * np.pi]
+
+    logging.basicConfig(filename='evo3.log', level=logging.INFO)
+    main(outdir=args.output, **eval_params(args.parameter), evolved_params=evolved_params,
          individual_params=eval_params(args.individual_param),
          outer_eval_params=eval_params(args.outer_eval_param),
          sweep_params=args.sweep_param, repeat=args.repeat,
