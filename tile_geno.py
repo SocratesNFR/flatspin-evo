@@ -1136,6 +1136,8 @@ if __name__ == '__main__':
     # common
     parser.add_argument('-o', '--output', metavar='FILE',
                         help=r'¯\_(ツ)_/¯')
+    parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
+                        help=r'name of the log file to create')
     parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={},
                         help="param passed to flatspin and inner evaluate fitness function")
     parser.add_argument('-s', '--sweep_param', action=StoreKeyValue, default=OrderedDict(),
@@ -1161,7 +1163,8 @@ if __name__ == '__main__':
     if args.evo_rotate:
         evolved_params["initial_rotation"] = [0, 2 * np.pi]
 
-    logging.basicConfig(filename='evo3.log', level=logging.INFO)
+    logpath = os.path.join(args.output, args.log)
+    logging.basicConfig(filename=logpath, level=logging.INFO)
     main(outdir=args.output, **eval_params(args.parameter), evolved_params=evolved_params,
          individual_params=eval_params(args.individual_param),
          outer_eval_params=eval_params(args.outer_eval_param),
