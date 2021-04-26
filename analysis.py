@@ -4,7 +4,7 @@ from networkx.drawing.nx_agraph import graphviz_layout
 from matplotlib import pyplot as plt
 import grandalf as grand
 from grandalf.layouts import SugiyamaLayout
-
+from functools import lru_cache
 
 def family_tree(ind_id, logfile, max_depth=float("inf")):
     with open(logfile, "r") as f:
@@ -65,14 +65,28 @@ def plot_tree(g):
     plt.show()
 
 
-def mutation_stats(logfile):
+def mutation_stats(logfile, indexfile):
     with open(logfile, "r") as f:
-        log = f.read()
+        log = f.readlines()
+    index = read_csv(indexfile)
 
+    for line in log:
 
-def fitness_diversity(indexfile):
-    indx = read_csv(indexfile)
-    fig, ax = plt.subplots()
-    indx.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax, label="unique", y="fitness")
-    indx.groupby("gen").agg({"fitness": "std"}).plot(ax=ax, label="std", y="fitness")
-    plt.show()
+def parse_log_line(log):
+    status = "failed" if log.startswith("INFO:root:Failed") else "succeeded"
+
+    return status, action, parnets, info
+
+def fitness_diversity(indexfile, show_max=False):
+     index = read_csv(indexfile)
+     fig, ax = plt.subplots(3 if show_max else 2,1)
+     index.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax[0], title="unique")
+     index.groupby("gen").agg({"fitness": "std"}).plot(ax=ax[1], title="std")
+     if show_max:
+         index.groupby("gen").agg({"fitness": "max"}).plot(ax=ax[2], title="max")
+     plt.show()
+
+@lru_cache
+def get_fitness(indv_id, index):
+    """gets fitness value for *first appearance* of indv_id"""
+    return index[index["indv_id"]==indv_id].iloc[0]["fitness"]
