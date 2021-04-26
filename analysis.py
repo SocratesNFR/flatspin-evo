@@ -72,6 +72,7 @@ def mutation_stats(logfile):
 
 def fitness_diversity(indexfile):
     indx = read_csv(indexfile)
-    indx.groupby("gen").agg({"fitness": "nunique"}).plot(label="unique", y="fitness")
-    indx.groupby("gen").agg({"fitness": "std"}).plot(label="std", y="fitness")
+    fig, ax = plt.subplots()
+    indx.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax, label="unique", y="fitness")
+    indx.groupby("gen").agg({"fitness": "std"}).plot(ax=ax, label="std", y="fitness")
     plt.show()
