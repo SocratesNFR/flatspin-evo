@@ -64,19 +64,20 @@ def plot_tree(g):
     nx.draw(g, pos=poses, with_labels=True)
     plt.show()
 
-
+"""
 def mutation_stats(logfile, indexfile):
     with open(logfile, "r") as f:
         log = f.readlines()
     index = read_csv(indexfile)
 
     for line in log:
+        pl = parse_log_line(line)
 
 def parse_log_line(log):
     status = "failed" if log.startswith("INFO:root:Failed") else "succeeded"
 
     return status, action, parnets, info
-
+"""
 def fitness_diversity(indexfile, show_max=False):
      index = read_csv(indexfile)
      fig, ax = plt.subplots(3 if show_max else 2,1)
