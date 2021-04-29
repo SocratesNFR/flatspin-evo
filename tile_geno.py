@@ -277,7 +277,8 @@ class Individual:
             logging.info(
                 f"ind {child.id} created from {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
         else:
-            logging.info(f"Failed crossover: {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+            logging.info(
+                f"Failed crossover: {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
 
         return [child] if child else []
 
@@ -1017,6 +1018,14 @@ def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
     return pop
 
 
+def correlation_fitness(pop, gen, outdir, target, **kwargs):
+    from runAnalysis import fitnessFunction
+    fit_func = lambda x: abs(fitnessFunction(x) - target)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
+
+    return pop
+
+
 def parity_fitness(pop, gen, outdir, n_delays=10, n_bits=3, **kwargs):
     from parity import do_parity
     def fit_func(ds):
@@ -1118,7 +1127,8 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
                   "image": image_match_fitness,
                   "mem_capacity": mem_capacity_fitness,
                   "parity": parity_fitness,
-                  "majority": majority_fitness
+                  "majority": majority_fitness,
+                  "correlation": correlation_fitness
                   }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
@@ -1163,7 +1173,9 @@ if __name__ == '__main__':
     if args.evo_rotate:
         evolved_params["initial_rotation"] = [0, 2 * np.pi]
 
-    logpath = os.path.join(args.output, args.log)
+    outpath = os.path.join(os.path.curdir, args.output)
+    logpath = os.path.join(outpath, args.log)
+    os.makedirs(outpath)
     logging.basicConfig(filename=logpath, level=logging.INFO)
     main(outdir=args.output, **eval_params(args.parameter), evolved_params=evolved_params,
          individual_params=eval_params(args.individual_param),
