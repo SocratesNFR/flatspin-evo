@@ -783,7 +783,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
         evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
-        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs)
+        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by)
 
         dataset = Dataset.read(shared_params["basepath"])
         queue = dataset
