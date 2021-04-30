@@ -810,7 +810,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                     else:
                         indv.fitness_components = fit_components
                 except Exception as e:  # not done saving file
-                    if shared_params["run"] != "dist":
+                    if shared_params["run"] != "dist" or group_by:
                         raise e
                     queue.append(ds)  # queue.append((indv_id, ds))
                     sleep(2)
