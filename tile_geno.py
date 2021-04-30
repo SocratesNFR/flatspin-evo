@@ -792,7 +792,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
         queue = list(queue)
         while len(queue) > 0:
             ds = queue.pop(0)
-            with np.errstate(all='ignore'):
+            with np.errstate():
                 indv_id = ds.index["indv_id"].values[0]
                 try:
                     # calculate fitness of a dataset
@@ -812,6 +812,8 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                 except Exception as e:  # not done saving file
                     if shared_params["run"] != "dist" or group_by:
                         raise e
+                    if type(e) != FileNotFoundError:
+                        print(type(e), e)
                     queue.append(ds)  # queue.append((indv_id, ds))
                     sleep(2)
 
