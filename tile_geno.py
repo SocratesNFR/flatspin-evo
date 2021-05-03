@@ -1189,7 +1189,8 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
                   "mem_capacity": mem_capacity_fitness,
                   "parity": parity_fitness,
                   "majority": majority_fitness,
-                  "correlation": correlation_fitness
+                  "correlation": correlation_fitness,
+                  "xor": xor_fitness
                   }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
