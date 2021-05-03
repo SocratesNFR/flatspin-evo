@@ -191,8 +191,6 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     # hacks to allow fixed geoms
     if "model" in kwargs and kwargs["model"] != "generated":
         individual_params["fixed_geom"] = True
-        if "condition" not in kwargs:
-            kwargs["condition"] = lambda *x: True  # overwrite default condition if fixed geom (as no concept of phenosize)
 
     pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
