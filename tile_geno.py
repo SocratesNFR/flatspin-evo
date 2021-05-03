@@ -776,6 +776,11 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     shared_params = default_shared
     shared_params.update(flatspin_kwargs)
 
+    if not condition:
+        condition = lambda x: True
+    elif condition == "fixed_size":
+        condition = lambda ind: len(ind.pheno) >= ind.pheno_size
+
     if run_params is None:
         run_params = get_default_run_params(pop, sweep_list, condition=condition)
 
@@ -1006,16 +1011,11 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
     return pop
 
 
-def r2_score(y_true, y_pred):
-    """ Calculate the coefficient of determination (R^2 score) between the two
-    signals y_true and y_pred """
-    print(f"y_true: {y_true}")
-    print(f"y_pred: {y_pred}")
-    cov = np.cov(y_true, y_pred)
-    divisor = cov[0, 0] * cov[1, 1]
-    if divisor == 0:
-        return 0
-    return cov[0, 1] ** 2 / divisor
+def mean_abs_diff_error(y_true, y_pred):
+    #print(f"y_true: {y_true}")
+    #print(f"y_pred: {y_pred}")
+    np.abs(y_true - y_pred)
+    return np.abs(y_true - y_pred).mean()
 
 
 def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
@@ -1023,7 +1023,7 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
                 cv_folds=10, alpha=1, sweep_params=None, encoder="Constant", H0=0, H=1000, input=1000, spp=1, **kwargs):
     from sklearn.linear_model import Ridge
     from sklearn.model_selection import KFold, cross_val_score
-    from sklearn.metrics import make_scorer
+    from sklearn.metrics import make_scorer, accuracy_score
 
     sweep_params = sweep_params if sweep_params else {}
 
@@ -1040,19 +1040,22 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         X = []  # reservoir outputs
         y = []  # targets
         for ds in dataset:
-            target = [1, 0] if load_output(ds, "h_ext", 0)[0][0] < H / 2 else [0,
-                                                                               1]  # is h_ext.x ==0? (use h/2 for rounding error)
+            target = int(load_output(ds, "h_ext", 0)[0][0] < H / 2)  # is h_ext.x ==0? (use h/2 for rounding error)
             y.append(target)
             x = read_table(ds.tablefile("spin")).iloc[-1].values[1:]
             X.append(x)
-        print(f"X: {X}")
-        print(f"y: {y}")
+        X=np.array(X)
+        y = np.array(y)
+        #print(f"X: {X}")
+        #print(X.shape)
+        #print(f"y: {y}")
+        #print(y.shape)
         readout = Ridge(alpha=alpha)
         # readout.fit(X, y)
 
         cv = KFold(n_splits=cv_folds, shuffle=False)
-        cv_scores = cross_val_score(readout, X, y, cv=cv, scoring=make_scorer(r2_score), n_jobs=1)
-
+        cv_scores = cross_val_score(readout, X, y, cv=cv, scoring=make_scorer(mean_abs_diff_error, greater_is_better=False), n_jobs=1)
+        #score is -error (max better)
         scores.append(cv_scores)
         fitness_components = np.mean(scores, axis=-1)
 
