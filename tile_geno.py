@@ -741,8 +741,10 @@ def get_default_shared_params(outdir="", gen=None):
 def get_default_run_params(pop, sweep_list, *, condition=None):
     sweep_list = sweep_list or [[0, 0, {}]]
 
-    # don't force len(pheno)=phenosize for non-finite phenosize
-    condition = condition or (lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size))
+    if not condition:
+        condition = lambda x: True
+    elif condition == "fixed_size":
+        condition = lambda ind: len(ind.pheno) >= ind.pheno_size
 
     id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
 
@@ -758,8 +760,8 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
 
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, sweep_params=None,
-                  condition=lambda i: len(i.pheno) >= i.pheno_size or not np.isfinite(i.pheno_size),
-                  group_by=None, max_jobs=1000, repeat=1, repeat_spec=None, preprocessing=None, **flatspin_kwargs):
+                  condition=None, group_by=None, max_jobs=1000, repeat=1, repeat_spec=None, preprocessing=None,
+                  **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -1001,6 +1003,63 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
+    return pop
+
+
+def r2_score(y_true, y_pred):
+    """ Calculate the coefficient of determination (R^2 score) between the two
+    signals y_true and y_pred """
+    print(f"y_true: {y_true}")
+    print(f"y_pred: {y_pred}")
+    cov = np.cov(y_true, y_pred)
+    divisor = cov[0, 0] * cov[1, 1]
+    if divisor == 0:
+        return 0
+    return cov[0, 1] ** 2 / divisor
+
+
+def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
+                crop_width=None, win_shape=None, win_step=None,
+                cv_folds=10, alpha=1, sweep_params=None, encoder="Constant", H0=0, H=1000, input=1000, spp=1, **kwargs):
+    from sklearn.linear_model import Ridge
+    from sklearn.model_selection import KFold, cross_val_score
+    from sklearn.metrics import make_scorer
+
+    sweep_params = sweep_params if sweep_params else {}
+
+    if "input" in sweep_params:
+        print("Overwriting 'input' in xor_fitness()!!")
+
+    sweep_params["phi"] = str([0, 90, 180, 270])
+    if np.isscalar(input):
+        input = [1] + [0] * (input - 1)
+
+    def fit_func(dataset):
+        scores = []
+
+        X = []  # reservoir outputs
+        y = []  # targets
+        for ds in dataset:
+            target = [1, 0] if load_output(ds, "h_ext", 0)[0][0] < H / 2 else [0,
+                                                                               1]  # is h_ext.x ==0? (use h/2 for rounding error)
+            y.append(target)
+            x = read_table(ds.tablefile("spin")).iloc[-1].values[1:]
+            X.append(x)
+        print(f"X: {X}")
+        print(f"y: {y}")
+        readout = Ridge(alpha=alpha)
+        # readout.fit(X, y)
+
+        cv = KFold(n_splits=cv_folds, shuffle=False)
+        cv_scores = cross_val_score(readout, X, y, cv=cv, scoring=make_scorer(r2_score), n_jobs=1)
+
+        scores.append(cv_scores)
+        fitness_components = np.mean(scores, axis=-1)
+
+        return fitness_components
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, encoder=encoder, sweep_params=sweep_params, H=H, H0=H0, input=input,
+                        spp=spp, **kwargs)
     return pop
 
 
