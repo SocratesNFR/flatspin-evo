@@ -8,14 +8,14 @@ from functools import lru_cache
 import numpy as np
 
 
-def family_tree(ind_id, logfile, max_depth=float("inf")):
+def family_tree(ind_id, logfile, max_depth=float("inf"), **kwargs):
     with open(logfile, "r") as f:
         log = f.read()
     g = build_family_net(ind_id, log, max_depth=max_depth, g=None)
 
     # pos = graphviz_layout(g, prog='dot')
     # nx.draw(g, pos, with_labels=False, arrows=False)
-    plot_tree(g)
+    plot_tree(g, **kwargs)
 
 
 def build_family_net(ind_id, log, max_depth=float("inf"), g=None):
@@ -50,11 +50,11 @@ def get_parents(ind_id, log):
     return parents
 
 
-def plot_tree(g):
+def plot_tree(g, width=10, height=10, with_labels=True, **kwargs):
     grn = grand.utils.convert_nextworkx_graph_to_grandalf(g)  # undocumented function
 
     class defaultview(object):
-        w, h = 10, 10
+        w, h = width, height
 
     for v in grn.C[0].sV: v.view = defaultview()
 
@@ -63,7 +63,7 @@ def plot_tree(g):
     sug.draw()  # This is a bit of a misnomer, as grandalf doesn't actually come with any visualization methods. This method instead calculates positions
 
     poses = {v.data: (v.view.xy[0], v.view.xy[1]) for v in grn.C[0].sV}  # Extracts the positions
-    nx.draw(g, pos=poses, with_labels=True)
+    nx.draw(g, pos=poses, with_labels=with_labels, **kwargs)
     plt.show()
 
 
@@ -102,10 +102,10 @@ def mutation_stats(logfile, indexfile):
     return beneficial, benign, malignant, fail
 
 
-def mutation_pie(logfile, indexfile):
+def mutation_pie(logfile, indexfile, **kwargs):
     beneficial, benign, malignant, fail = mutation_stats(logfile, indexfile)
     i = 1
-    plt.figure()
+    plt.figure(**kwargs)
     categories = [beneficial, benign, malignant, fail]
     cat_names = ["beneficial", "benign", "malignant", "fail"]
     for data, title in zip(categories, cat_names):
@@ -114,7 +114,7 @@ def mutation_pie(logfile, indexfile):
         plt.pie(vals, labels=keys)
         plt.title(title)
         i += 1
-    plt.figure()
+    plt.figure(**kwargs)
     cat_map = dict(zip(cat_names, categories))
     mut_names = set([k for cat in categories for k in cat])
     cols = 3
@@ -128,7 +128,7 @@ def mutation_pie(logfile, indexfile):
         keys, vals = zip(*data.items())
 
         keys_with_total = [key + f"{data[key]}" for key in keys]
-        plt.pie(vals, labels=keys_with_total,)
+        plt.pie(vals, labels=keys_with_total, )
         plt.title(title, wrap=True, fontsize=8)
         i += 1
 
@@ -177,13 +177,13 @@ def parse_log_line(line):
     return failed, ind, action, parents, info
 
 
-def fitness_diversity(indexfile, show_max=False):
+def fitness_diversity(indexfile, show_max=False, **kwargs):
     index = read_csv(indexfile)
     fig, ax = plt.subplots(3 if show_max else 2, 1)
-    index.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax[0], title="unique")
-    index.groupby("gen").agg({"fitness": "std"}).plot(ax=ax[1], title="std")
+    index.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax[0], title="unique", **kwargs)
+    index.groupby("gen").agg({"fitness": "std"}).plot(ax=ax[1], title="std", **kwargs)
     if show_max:
-        index.groupby("gen").agg({"fitness": "max"}).plot(ax=ax[2], title="max")
+        index.groupby("gen").agg({"fitness": "max"}).plot(ax=ax[2], title="max", **kwargs)
     plt.show()
 
 
@@ -191,3 +191,38 @@ def get_fitness(indv_id, index):
     """gets fitness value for *first appearance* of indv_id"""
     indv = index[index["indv_id"] == indv_id]
     return indv.iloc[0]["fitness"] if len(indv) > 0 else "not found"
+
+
+if __name__ == '__main__':
+    import argparse
+    import os
+    from flatspin.cmdline import StoreKeyValue, eval_params
+
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    # common
+    parser.add_argument('action', metavar="action",choices=["mut-pie", "family-tree", "diversity"])
+    parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
+                        help=r'name of log')
+    parser.add_argument('-b', '--basepath', metavar='FILE', default="",
+                        help=r'location of log and index')
+
+    parser.add_argument('-p', '--param', action=StoreKeyValue, default={},
+                        help="keyword params")
+
+    args = parser.parse_args()
+
+    log = os.path.join(args.basepath, args.log)
+    index = os.path.join(args.basepath, "index.csv")
+
+    if args.action == "mut-pie":
+        mutation_pie(log, index, **args.param)
+    elif args.action == "diversity":
+        fitness_diversity(index, **args.param)
+    elif args.action == "family-tree":
+        if "ind_id" not in args.param:
+            raise Exception("parameter ind_id must be supplied for action 'family-tree'")
+        ind_id = args.param.pop("ind_id")
+        family_tree(ind_id, log, **args.param)
+    else:
+        raise Exception(f"Unknown action: '{args.action}'")
