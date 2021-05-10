@@ -1012,8 +1012,8 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
 
 
 def mean_abs_diff_error(y_true, y_pred):
-    #print(f"y_true: {y_true}")
-    #print(f"y_pred: {y_pred}")
+    # print(f"y_true: {y_true}")
+    # print(f"y_pred: {y_pred}")
     np.abs(y_true - y_pred)
     return np.abs(y_true - y_pred).mean()
 
@@ -1044,18 +1044,19 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
             y.append(target)
             x = read_table(ds.tablefile("spin")).iloc[-1].values[1:]
             X.append(x)
-        X=np.array(X)
+        X = np.array(X)
         y = np.array(y)
-        #print(f"X: {X}")
-        #print(X.shape)
-        #print(f"y: {y}")
-        #print(y.shape)
+        # print(f"X: {X}")
+        # print(X.shape)
+        # print(f"y: {y}")
+        # print(y.shape)
         readout = Ridge(alpha=alpha)
         # readout.fit(X, y)
 
         cv = KFold(n_splits=cv_folds, shuffle=False)
-        cv_scores = cross_val_score(readout, X, y, cv=cv, scoring=make_scorer(mean_abs_diff_error, greater_is_better=False), n_jobs=1)
-        #score is -error (max better)
+        cv_scores = cross_val_score(readout, X, y, cv=cv,
+                                    scoring=make_scorer(mean_abs_diff_error, greater_is_better=False), n_jobs=1)
+        # score is -error (max better)
         scores.append(cv_scores)
         fitness_components = np.mean(scores, axis=-1)
 
@@ -1150,19 +1151,40 @@ def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8)
     return pop
 
 
-def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **flatspin_kwargs):
-    shared_params = {}
-    shared_params["encoder"] = "Rotate"
-    shared_params["input"] = np.linspace(1, 0, shared_params["periods"])
+def get_range(a):
+    mn, mx = minmax(a)
+    return mx - mn
+
+
+def minmax(a):
+    a = np.array(a) if type(a) != np.ndarray else a
+    if a.ndim > 1:
+        a = a.reshape(-1, a.shape[-1])
+
+    return a.min(axis=0), a.max(axis=0)
+
+
+def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, condition=None, **flatspin_kwargs):
+    # shared_params = {}
+    # shared_params["encoder"] = "Rotate"
+    # shared_params["input"] = np.linspace(1, 0, shared_params["periods"])
     if np.isscalar(grid_size):
         grid_size = (grid_size, grid_size)
 
     for i in pop:
-        i.grid = Grid.fixed_grid(np.array([mag.pos for mag in i.pheno]), grid_size)
+        i.poss = [mag.pos for mag in i.pheno]
+        i.grid = Grid.fixed_grid(np.array(i.poss), grid_size)
 
     # check there are magnets in at least half of grid
-    condition = lambda i: (len(np.unique(i.grid._grid_index, axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and \
-                          len(i.pheno) >= i.pheno_size
+    # condition = lambda i: (len(np.unique(i.grid._grid_index, axis=0)) >= 0.5 * grid_size[0] * grid_size[1]) and \
+    #                       len(i.pheno) >= i.pheno_size
+    fixed_size = condition == "fixed_size"
+
+    def condition(indv):
+        x, y = get_range(indv.poss)
+
+        return (0.5 * y <= x <= 2 * y) and not (fixed_size and len(indv.pheno) < indv.pheno_size)
+
     id2indv = {individual.id: individual for individual in pop}
 
     def fit_func(ds):
@@ -1170,12 +1192,17 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, **flatspin_kwarg
         magnitude = np.linalg.norm(mag, axis=3)[0]
         indv = id2indv[ds.index["indv_id"].values[0]]
         cells_with_mags = [(x, y) for x, y in np.unique(indv.grid._grid_index, axis=0)]
+        # old
+        """
         # fitness is std of the magnitudes of the cells minus std of the number of magnets in each cell
         fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
                np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
+        """
+        fitn = ((np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold) * 2 - 1).sum()
+
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, shared_params=shared_params, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
     return pop
 
 
