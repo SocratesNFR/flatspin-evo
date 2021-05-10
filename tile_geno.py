@@ -1198,7 +1198,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
         fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
                np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
         """
-        fitn = ((np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold) * 2 - 1).sum()
+        fitn = abs(((np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold) * 2 - 1).sum())
 
         return fitn
 
