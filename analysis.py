@@ -177,13 +177,13 @@ def parse_log_line(line):
     return failed, ind, action, parents, info
 
 
-def fitness_diversity(indexfile, show_max=False, **kwargs):
+def fitness_diversity(indexfile, agg=None, **kwargs):
     index = read_csv(indexfile)
-    fig, ax = plt.subplots(3 if show_max else 2, 1)
-    index.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax[0], title="unique", **kwargs)
+    fig, ax = plt.subplots(3 if agg else 2, 1)
+    index.groupby("gen").agg({"fitness": "nunique"}).plot(ax=ax[0], title="#unique", **kwargs)
     index.groupby("gen").agg({"fitness": "std"}).plot(ax=ax[1], title="std", **kwargs)
-    if show_max:
-        index.groupby("gen").agg({"fitness": "max"}).plot(ax=ax[2], title="max", **kwargs)
+    if agg:
+        index.groupby("gen").agg({"fitness": agg}).plot(ax=ax[2], title=agg, **kwargs)
     plt.show()
 
 
