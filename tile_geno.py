@@ -414,6 +414,36 @@ class Individual:
 
         return res_info
 
+    @staticmethod
+    def known_spinice(name, min_dist=1e-6, **kwargs):
+        min_dist = (min_dist,) * 2 if np.isscalar(min_dist) else min_dist
+        if name == "square":
+            ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
+            t = ind.tiles[0]
+            t[1].i_set_rot(0)
+            t[1].i_set_pos(t[0].pos[0] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[0],
+                           t[0].pos[1] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[1])
+        elif name == "pinwheel":
+            ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
+            t = ind.tiles[0]
+            t[1].i_set_rot(0)
+            t[1].i_set_pos(t[0].pos[0],
+                           t[0].pos[1] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[1])
+        elif name == "kagome":
+            # sorry
+            ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
+            t = ind.tiles[0]
+            t[1].i_set_rot(np.deg2rad(240))
+            t[0].i_set_rot(0)
+            hh, hw = (t[1].mag_h + t[1].padding) / 2, (t[1].mag_w + t[1].padding) / 2
+            t[1].i_set_pos(t[0].pos[0] + hw + hw * np.sin(np.deg2rad(30)) + hh * np.sin(np.deg2rad(60)) + min_dist[0],
+                           t[0].pos[1] + hh + hw * np.cos(np.deg2rad(30)) - hh * np.cos(np.deg2rad(60)) + min_dist[1])
+            t.i_rotate(np.deg2rad(90), t[0].pos)
+        else:
+            raise Exception(f"name '{name}' not recognised")
+        ind.pheno = ind.geno2pheno(ind.pheno_size)
+        return ind
+
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
             patch = mag.as_patch()
@@ -427,7 +457,7 @@ class Individual:
 
 
 class Tile(Sequence):
-    def __init__(self, *, mag_w=20, mag_h=50, tile_size=150, max_symbol=1, magnets=None):
+    def __init__(self, *, tile_size=600, mag_w=220, mag_h=80, max_symbol=1, magnets=None):
         """
         make new random tile from scratch
         """
@@ -522,6 +552,9 @@ class Tile(Sequence):
         for magnet in self:
             magnet.i_rotate(angle, origin)
 
+    def plot(self, **kwargs):
+        Individual.print_mags(self, **kwargs)
+
 
 class Magnet:
     def __init__(self, symbol, pos, angle, mag_w, mag_h, created=None, padding=20):
@@ -531,8 +564,8 @@ class Magnet:
         self.mag_w = mag_w
         self.mag_h = mag_h
         self.created = created
+        # padding 20nm results in min posibile distance between 2 magnets as 20nm (pads each side by 20/2)
         self.padding = padding
-
         self.as_polygon, self.bound = self.init_polygon()
         self.locked = False
 
@@ -598,6 +631,12 @@ class Magnet:
         self.pos += np.array((x, y))
         self.as_polygon = translate(self.as_polygon, x, y)
         self.bound = translate(self.bound, x, y)
+
+    def i_set_pos(self, x, y):
+        self.i_translate(x - self.pos[0], y - self.pos[1])
+
+    def i_set_rot(self, angle):
+        self.i_rotate(angle - self.angle, "centroid")
 
     @staticmethod
     def rot(v, angle):
