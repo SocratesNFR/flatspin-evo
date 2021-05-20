@@ -40,7 +40,7 @@ class Individual:
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
                  pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
-                 tiles=None, init_pheno=True, evolved_params_values={}, fixed_geom=False, **kwargs):
+                 tiles=None, init_pheno=True, evolved_params_values=None, fixed_geom=False, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -58,7 +58,7 @@ class Individual:
         self.fitness = fitness
         self.fitness_components = fitness_components
 
-        self.evolved_params_values = evolved_params_values
+        self.evolved_params_values = evolved_params_values if evolved_params_values else {}
         for param in Individual._evolved_params:
             if self.evolved_params_values.get(param) is None:
                 self.evolved_params_values[param] = np.random.uniform(Individual._evolved_params[param]["low"],
@@ -868,8 +868,10 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     return pop
 
 
-def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False, max_jobs=1000):
+def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000):
     """ modified from run_sweep.py main()"""
+    if not evolved_params:
+        evolved_params = []
     model_name = shared_params.pop("model", "CustomSpinIce")
     model_class = import_class(model_name, 'flatspin.model')
     encoder_name = shared_params.get("encoder", "Sine")
@@ -935,9 +937,11 @@ def evo_run(runs_params, shared_params, gen, evolved_params=[], wait=False, max_
     return
 
 
-def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=[], sweep_list=None, **flatspin_kwargs):
+def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sweep_list=None, **flatspin_kwargs):
     shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
+    if not other_sizes_fractions:
+        other_sizes_fractions = []
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
 
@@ -981,7 +985,10 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     return pop
 
 
-def majority_fitness(pop, gen, outdir, sweep_params, test_at=[.2, .4, .6, .8], match=True, **flatspin_kwargs):
+def majority_fitness(pop, gen, outdir, sweep_params, test_at=None, match=True, **flatspin_kwargs):
+    if not test_at:
+        test_at = [.2, .4, .6, .8]
+
     if "test_perc" in sweep_params:
         warnings.warn("majority fitness function overwriting value of 'test_perc'")
 
