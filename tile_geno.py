@@ -4,7 +4,7 @@ import pickle as pkl
 import warnings
 
 from flatspin import plotting
-from shapely.geometry import box
+from shapely.geometry import box, MultiPolygon
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
 from itertools import count
@@ -444,6 +444,29 @@ class Individual:
         ind.pheno = ind.geno2pheno(ind.pheno_size)
         return ind
 
+    @staticmethod
+    def tessellate(magnets, shape=(5, 1), padding=0, centre=True):
+        polygons = MultiPolygon([mag.as_polygon for mag in magnets])
+        minx, miny, maxx, maxy = polygons.bounds
+        cell_size = np.array([maxx - minx, maxy - miny])
+        first_row = [mag.copy() for mag in magnets]
+        for col in range(1, shape[0]):
+            new_col = [mag.copy() for mag in magnets]
+            for mag in new_col:
+                mag.i_translate(col * cell_size[0], 0)
+            first_row.extend(new_col)
+        result = []
+        for row in range(1, shape[1]):
+            new_row = [mag.copy() for mag in first_row]
+            for mag in new_row:
+                mag.i_translate(0, row * cell_size[1])
+            result.extend(new_row)
+        result.extend(first_row)
+        if centre:
+            centre_magnets(result)
+        return result
+
+
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
             patch = mag.as_patch()
@@ -564,7 +587,7 @@ class Magnet:
         self.mag_w = mag_w
         self.mag_h = mag_h
         self.created = created
-        # padding 20nm results in min posibile distance between 2 magnets as 20nm (pads each side by 20/2)
+        # padding 20nm results in min possible distance between 2 magnets as 20nm (pads each side by 20/2)
         self.padding = padding
         self.as_polygon, self.bound = self.init_polygon()
         self.locked = False
