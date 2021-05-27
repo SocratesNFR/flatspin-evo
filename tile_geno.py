@@ -59,6 +59,9 @@ class Individual:
         self.fitness_components = fitness_components
 
         self.evolved_params_values = evolved_params_values if evolved_params_values else {}
+        if any((ep not in Individual._evolved_params for ep in self.evolved_params_values)):
+            warnings.warn(
+                "Unexpected evolved parameter passed to Individual constructor, this will not be mutated correctly!")
         for param in Individual._evolved_params:
             if self.evolved_params_values.get(param) is None:
                 self.evolved_params_values[param] = np.random.uniform(Individual._evolved_params[param]["low"],
@@ -98,7 +101,7 @@ class Individual:
         params = {k: v for (k, v) in vars(self).items() if k not in ignore_attributes}
         params.update(overide_kwargs)
         new_indv = Individual(**params)
-        new_indv.evolved_params_values = deepcopy(new_indv.evolved_params_values)
+        new_indv.evolved_params_values = deepcopy(self.evolved_params_values)
         # copy attributes that are referenced to unlink
         if not new_indv.fixed_geom:
             new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
@@ -263,8 +266,10 @@ class Individual:
             else:
                 cx = Individual.crossover_tiles
             child = cx(parents)
+            cx_name = cx.__name__
         else:
             child = parents[0].copy()
+            cx_name = "fixed_copy"
 
         evo_params_info = ""
         if child:
@@ -275,10 +280,10 @@ class Individual:
             child.age = 0
             child.refresh()
             logging.info(
-                f"ind {child.id} created from {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+                f"ind {child.id} created from {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
         else:
             logging.info(
-                f"Failed crossover: {cx.__name__} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+                f"Failed crossover: {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
 
         return [child] if child else []
 
@@ -465,7 +470,6 @@ class Individual:
         if centre:
             centre_magnets(result)
         return result
-
 
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
@@ -821,7 +825,8 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
     return run_params
 
 
-def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, sweep_params=None,
+def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, do_not_override_default=False,
+                  sweep_params=None,
                   condition=None, group_by=None, max_jobs=1000, repeat=1, repeat_spec=None, preprocessing=None,
                   **flatspin_kwargs):
     """
@@ -833,9 +838,12 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
         return pop
     sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else []
     default_shared = get_default_shared_params(outdir, gen)
-    if shared_params is not None:
+    if shared_params is None:
+        shared_params = default_shared
+    elif not do_not_override_default:
         default_shared.update(shared_params)
-    shared_params = default_shared
+        shared_params = default_shared
+
     shared_params.update(flatspin_kwargs)
 
     if not condition:
@@ -898,7 +906,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
     model_name = shared_params.pop("model", "CustomSpinIce")
     model_class = import_class(model_name, 'flatspin.model')
     encoder_name = shared_params.get("encoder", "Sine")
-    encoder_class = import_class(encoder_name, 'flatspin.encoder')
+    encoder_class = import_class(encoder_name, 'flatspin.encoder') if type(encoder_name) is str else encoder_name
 
     data_format = shared_params.get("format", "npz")
 
@@ -1201,6 +1209,36 @@ def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     return pop
 
 
+def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, img_basepath="", **flatspin_kwargs):
+    from analyze_sweep import find_rule
+    # \from ca_encoder import CARotateEncoder
+    default_shared_params = {"model": "PinwheelSpinIceDiamond", "run": "local", "encoder": "ca_encoder.CARotateEncoder",
+                             "spp": 10, "periods": 1, "timesteps": 10,"basepath":os.path.join(outdir, f"gen{gen}")}
+    input = '[[1,1,1],[1,1,0],[1,0,1],[1,0,0],[0,1,1],[0,1,0],[0,0,1],[0,0,0]]'
+    init = str([os.path.join(img_basepath, "init_half_0.png"), os.path.join(img_basepath, "init_half_1.png")])
+    if not sweep_params:
+        sweep_params = {}
+    if "init" in sweep_params or "input" in sweep_params:
+        warnings.warn("Overiding 'init' and input in fitness function")
+    sweep_params = dict(sweep_params, input=input, init=init)
+    if not group_by:
+        group_by = []
+    if "indv_id" not in group_by:
+        group_by.append("indv_id")
+    if "random_seed" in sweep_params and "random_seed" not in group_by:
+        group_by.append("random_seed")
+
+    def fit_func(ds):
+        """takes a group of ds of same indv_id and seed (one full run of all ca inputs on a system)"""
+        fitn = find_rule((None, ds))[1] == target
+        return fitn
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params,
+                        shared_params=default_shared_params, do_not_override_default=True,
+                        **flatspin_kwargs)
+    return pop
+
+
 def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **flatspin_kwargs):
     shared_params = {}
     shared_params["phi"] = 360
@@ -1289,7 +1327,8 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
                   "parity": parity_fitness,
                   "majority": majority_fitness,
                   "correlation": correlation_fitness,
-                  "xor": xor_fitness
+                  "xor": xor_fitness,
+                  "ca_rule":ca_rule_fitness
                   }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)

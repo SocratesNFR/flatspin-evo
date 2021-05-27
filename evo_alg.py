@@ -32,7 +32,8 @@ def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
 
     if len(pop) < pop_size:
         # if not enough to select from: return all indvs with none nan fitness and select remainder randomly
-        pop += list(np.random.choice(nan_pop, pop_size - len(pop), replace=False))
+        if len(nan_pop) > 0:
+            pop += list(np.random.choice(nan_pop, pop_size - len(pop), replace=False))
         return pop
 
     if minimize_fit:
@@ -170,8 +171,8 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
-         outer_eval_params={}, evolved_params={},
-         sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None, **kwargs):
+         outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None,
+         starting_pop=None, **kwargs):
     check_args = np.unique(list(evolved_params) + list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
     if check_args:
@@ -191,8 +192,14 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     # hacks to allow fixed geoms
     if "model" in kwargs and kwargs["model"] != "generated":
         individual_params["fixed_geom"] = True
-
-    pop = [individual_class(**individual_params) for _ in range(pop_size)]
+    if starting_pop:
+        try:
+            with open(starting_pop,"r") as f:
+                starting_pop = f.read().splitlines()
+        except Exception: pass
+        pop = [individual_class.from_string(i) for i in starting_pop]
+    else:
+        pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
     gen_times = []
@@ -242,7 +249,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         print("    Select")
         pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
-        assert len(pop) == pop_size
+        assert len(pop) <= pop_size
 
         update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
         dataset.save()
