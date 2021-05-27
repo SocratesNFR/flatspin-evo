@@ -201,7 +201,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
 
     # common
-    parser.add_argument('action', metavar="action",choices=["mut-pie", "family-tree", "diversity"])
+    parser.add_argument('action', metavar="action",choices=["mut-pie", "family-tree", "diversity"], help="[mut-pie/family-tree/diversity]")
     parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
                         help=r'name of log')
     parser.add_argument('-b', '--basepath', metavar='FILE', default="",
