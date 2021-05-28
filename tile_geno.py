@@ -968,14 +968,15 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
     return
 
 
-def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sweep_list=None, **flatspin_kwargs):
+def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sweep_params=None, repeat=1,
+                  repeat_spec=None, **flatspin_kwargs):
     shared_params = get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
     if not other_sizes_fractions:
         other_sizes_fractions = []
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
-
+    sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else []
     run_params = get_default_run_params(pop, sweep_list, condition=flatspin_kwargs.get("condition"))
     frac_run_params = []
     if len(run_params) > 0:
@@ -999,7 +1000,8 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sw
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params,
-                        run_params=run_params + frac_run_params, **flatspin_kwargs)
+                        run_params=run_params + frac_run_params, repeat=repeat, repeat_spec=repeat_spec,
+                        **flatspin_kwargs)
     return pop
 
 
@@ -1097,18 +1099,42 @@ def mean_abs_diff_error(y_true, y_pred):
 
 def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
                 crop_width=None, win_shape=None, win_step=None,
-                cv_folds=10, alpha=1, sweep_params=None, encoder="Constant", H0=0, H=1000, input=1000, spp=1, **kwargs):
+                cv_folds=10, alpha=1, sweep_params=None, encoder="Constant", angle0=-45, angle1=45, H0=0, H=1000,
+                input=1000, spp=1, **kwargs):
     from sklearn.linear_model import Ridge
     from sklearn.model_selection import KFold, cross_val_score
     from sklearn.metrics import make_scorer, accuracy_score
 
     sweep_params = sweep_params if sweep_params else {}
 
-    if "input" in sweep_params:
-        print("Overwriting 'input' in xor_fitness()!!")
+    def reduce_angle(a):
+        return (a + 180) % 360 - 180
 
-    sweep_params["phi"] = str([0, 90, 180, 270])
+    def diff_bisector(a0, a1, bool0=0, bool1=0):
+        a0 += 180 * bool0
+        a1 += 180 * bool1
+        return a0 + reduce_angle(a1 - a0) / 2
+
+    # calculate simulated angles from the logical axes
+    logic_values = ("00", "01", "10", "11")
+    # default_angles = [diff_bisector(angle0, angle1, b0, b1) for b0 in (0, 1) for b1 in (0, 1)]
+    sweep_params["logical_val"] = str(logic_values)
+
+    id2indv = {individual.id: individual for individual in pop}
+
+    def preprocessing(run_params):
+        """calculate phi value from logical value"""
+        for run_param in run_params:
+            ind = id2indv[run_param["indv_id"]]
+            a0 = ind.evolved_params_values["angle0"] if "angle0" in ind.evolved_params_values else angle0
+            a1 = ind.evolved_params_values["angle1"] if "angle1" in ind.evolved_params_values else angle1
+            b0, b1 = [b == '1' for b in run_param["logical_val"]]
+            run_param["phi"] = diff_bisector(a0, a1, b0, b1)
+        return run_params
+
     if np.isscalar(input):
+        if "input" in sweep_params:
+            print("Overwriting 'input' in xor_fitness()!!")
         input = [1] + [0] * (input - 1)
 
     def fit_func(dataset):
@@ -1117,7 +1143,8 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         X = []  # reservoir outputs
         y = []  # targets
         for ds in dataset:
-            target = int(load_output(ds, "h_ext", 0)[0][0] < H / 2)  # is h_ext.x ==0? (use h/2 for rounding error)
+            logic_val = ds.index["logical_val"][0]
+            target = logic_val in ["01", "10"]  # calculate xor
             y.append(target)
             x = read_table(ds.tablefile("spin")).iloc[-1].values[1:]
             X.append(x)
@@ -1140,7 +1167,7 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         return fitness_components
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, encoder=encoder, sweep_params=sweep_params, H=H, H0=H0, input=input,
-                        spp=spp, **kwargs)
+                        spp=spp,preprocessing=preprocessing, **kwargs)
     return pop
 
 
@@ -1213,7 +1240,7 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
     from analyze_sweep import find_rule
     # \from ca_encoder import CARotateEncoder
     default_shared_params = {"model": "PinwheelSpinIceDiamond", "run": "local", "encoder": "ca_encoder.CARotateEncoder",
-                             "spp": 10, "periods": 1, "timesteps": 10,"basepath":os.path.join(outdir, f"gen{gen}")}
+                             "spp": 10, "periods": 1, "timesteps": 10, "basepath": os.path.join(outdir, f"gen{gen}")}
     input = '[[1,1,1],[1,1,0],[1,0,1],[1,0,0],[0,1,1],[0,1,0],[0,0,1],[0,0,0]]'
     init = str([os.path.join(img_basepath, "init_half_0.png"), os.path.join(img_basepath, "init_half_1.png")])
     if not sweep_params:
@@ -1328,7 +1355,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
                   "majority": majority_fitness,
                   "correlation": correlation_fitness,
                   "xor": xor_fitness,
-                  "ca_rule":ca_rule_fitness
+                  "ca_rule": ca_rule_fitness
                   }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
