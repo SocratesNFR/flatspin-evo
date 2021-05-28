@@ -108,15 +108,24 @@ def mutation_pie(logfile, indexfile, **kwargs):
     plt.figure(**kwargs)
     categories = [beneficial, benign, malignant, fail]
     cat_names = ["beneficial", "benign", "malignant", "fail"]
+    mut_names = set([k for cat in categories for k in cat])
+    cat_map = dict(zip(cat_names, categories))
+    mut_totals = {mut_name: sum([cat_map[cat][mut_name] for cat in cat_names if mut_name in cat_map[cat]]) for mut_name
+                  in mut_names}
     for data, title in zip(categories, cat_names):
-        plt.subplot(4, 1, i)
+        plt.subplot(4, 2, i)
         keys, vals = zip(*data.items())
         plt.pie(vals, labels=keys)
         plt.title(title)
         i += 1
+        # normalised
+        plt.subplot(4, 2, i)
+        vals = [round(vals[i] / mut_totals[keys[i]], 3) for i in range(len(vals))]
+        plt.pie(vals, labels=[f"{keys[i]}:{vals[i]}" for i in range(len(vals))])
+        plt.title(f"norm {title}")
+        i += 1
     plt.figure(**kwargs)
-    cat_map = dict(zip(cat_names, categories))
-    mut_names = set([k for cat in categories for k in cat])
+
     cols = 3
     rows = len(mut_names) // cols + (len(mut_names) % cols)
     i = 1
@@ -127,7 +136,7 @@ def mutation_pie(logfile, indexfile, **kwargs):
         plt.subplot(rows, cols, i)
         keys, vals = zip(*data.items())
 
-        keys_with_total = [key + f"{data[key]}" for key in keys]
+        keys_with_total = [key + f":{data[key]}" for key in keys]
         plt.pie(vals, labels=keys_with_total, )
         plt.title(title, wrap=True, fontsize=8)
         i += 1
@@ -201,7 +210,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
 
     # common
-    parser.add_argument('action', metavar="action",choices=["mut-pie", "family-tree", "diversity"], help="[mut-pie/family-tree/diversity]")
+    parser.add_argument('action', metavar="action", choices=["mut-pie", "family-tree", "diversity"],
+                        help="[mut-pie/family-tree/diversity]")
     parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
                         help=r'name of log')
     parser.add_argument('-b', '--basepath', metavar='FILE', default="",
