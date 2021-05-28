@@ -1143,7 +1143,7 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         X = []  # reservoir outputs
         y = []  # targets
         for ds in dataset:
-            logic_val = ds.index["logical_val"][0]
+            logic_val = ds.index["logical_val"].values[0]
             target = logic_val in ["01", "10"]  # calculate xor
             y.append(target)
             x = read_table(ds.tablefile("spin")).iloc[-1].values[1:]
