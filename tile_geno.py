@@ -1255,9 +1255,11 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
     if "random_seed" in sweep_params and "random_seed" not in group_by:
         group_by.append("random_seed")
 
+    langtons_table = {x: '{0:08b}'.format(x).count('1') / 8 for x in range(0, 256)} # lambda[rule]
     def fit_func(ds):
         """takes a group of ds of same indv_id and seed (one full run of all ca inputs on a system)"""
-        fitn = find_rule((None, ds))[1] == target
+        rule = find_rule((None, ds))[1]
+        fitn = abs(langtons_table[rule] - langtons_table[target])
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params,
