@@ -820,10 +820,14 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
     run_params = []
     for id, indv in id2indv.items():
         for i, j, rp in sweep_list:
-            coords = np.array([mag.pos for mag in indv.pheno]) if not indv.fixed_geom else [0]
-            angles = np.array([mag.angle for mag in indv.pheno]) if not indv.fixed_geom else [0]
-            run_params.append(
-                dict(rp, indv_id=id, magnet_coords=coords, magnet_angles=angles, sub_run_name=f"_{i}_{j}"))
+            if indv.fixed_geom:
+                run_params.append(
+                    dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}"))
+            else:
+                coords = np.array([mag.pos for mag in indv.pheno]) if not indv.fixed_geom else [0]
+                angles = np.array([mag.angle for mag in indv.pheno]) if not indv.fixed_geom else [0]
+                run_params.append(
+                    dict(rp, indv_id=id, magnet_coords=coords, magnet_angles=angles, sub_run_name=f"_{i}_{j}"))
 
     return run_params
 
