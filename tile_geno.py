@@ -1255,13 +1255,19 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
         group_by.append("indv_id")
     if "random_seed" in sweep_params and "random_seed" not in group_by:
         group_by.append("random_seed")
+
     if compare == "langton":
         langtons_table = {x: '{0:08b}'.format(x).count('1') / 8 for x in range(0, 256)} # lambda[rule]
+    elif compare == "equiv":
+        from ca_rule_tools import eq_rules
+        equiv_rules = list(filter(lambda x: target in x, eq_rules))[0]
     def fit_func(ds):
         """takes a group of ds of same indv_id and seed (one full run of all ca inputs on a system)"""
         rule = find_rule((None, ds))[1]
         if compare=="langton":
             fitn = abs(langtons_table[rule] - langtons_table[target])
+        elif compare == "equiv":
+            fitn = int(rule in equiv_rules)
         else:#direct compare
             fitn = int(rule==target)
         return fitn
