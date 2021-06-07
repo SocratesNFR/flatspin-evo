@@ -40,6 +40,7 @@ class Individual:
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
                  pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
+                 fitness_info=None,
                  tiles=None, init_pheno=True, evolved_params_values=None, fixed_geom=False, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
@@ -57,7 +58,7 @@ class Individual:
             self.pheno_bounds = [pheno_bounds] * 2
         self.fitness = fitness
         self.fitness_components = fitness_components
-
+        self.fitness_info = fitness_info
         self.evolved_params_values = evolved_params_values if evolved_params_values else {}
         if any((ep not in Individual._evolved_params for ep in self.evolved_params_values)):
             warnings.warn(
@@ -88,6 +89,7 @@ class Individual:
     def clear_fitness(self):
         self.fitness = None
         self.fitness_components = None
+        self.fitness_info = None
 
     def __repr__(self):
         # defines which attributes are ignored by repr
@@ -1261,6 +1263,8 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
     elif compare == "equiv":
         from ca_rule_tools import eq_rules
         equiv_rules = list(filter(lambda x: target in x, eq_rules))[0]
+    id2indv = {individual.id: individual for individual in pop}
+
     def fit_func(ds):
         """takes a group of ds of same indv_id and seed (one full run of all ca inputs on a system)"""
         rule = find_rule((None, ds))[1]
@@ -1270,6 +1274,11 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
             fitn = int(rule in equiv_rules)
         else:#direct compare
             fitn = int(rule==target)
+        id = ds[0].index["indv_id"].values[0]
+        indv = id2indv[id]
+        indv.fitness_info = [] if indv.fitness_info is None else indv.fitness_info
+        indv.fitness_info.append(f"rule {rule}")
+
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params,
