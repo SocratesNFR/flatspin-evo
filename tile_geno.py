@@ -1278,7 +1278,7 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
             fitn = int(rule in equiv_rules)
         else:#direct compare
             fitn = int(rule==target)
-        id = ds[0].index["indv_id"].values[0]
+        id = ds.index["indv_id"].values[0]
         indv = id2indv[id]
         indv.fitness_info = [] if indv.fitness_info is None else indv.fitness_info
         indv.fitness_info.append(f"rule {rule}")
