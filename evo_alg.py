@@ -158,7 +158,8 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
         # patch outdir
         ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
-        ind.drop(columns=['magnet_coords', 'magnet_angles'], inplace=True)  # debug
+        to_drop = [col for col in ['magnet_coords', 'magnet_angles'] if col in ind]
+        ind.drop(columns=to_drop, inplace=True)  # debug
         # fitness_componenets should be added last due to variable column number
         for i, comp in enumerate(indv.fitness_components):
             ind.insert(len(ind.columns), f"fitness_component{i}", comp)
