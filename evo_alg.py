@@ -194,10 +194,11 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         individual_params["fixed_geom"] = True
     if starting_pop:
         try:
-            with open(starting_pop,"r") as f:
+            with open(starting_pop, "r") as f:
                 starting_pop = f.read().splitlines()
-        except Exception: pass
-        pop = [individual_class.from_string(i) for i in starting_pop]
+        except Exception:
+            pass
+        pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
     else:
         pop = [individual_class(**individual_params) for _ in range(pop_size)]
     pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
@@ -237,9 +238,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
             # Eval
         print("    Evaluate")
-        if reval_inner: #do we re-evealuate all inner fitnesses?
+        if reval_inner:  # do we re-evealuate all inner fitnesses?
             pop.extend(new_kids)
-            list(map(individual_class.clear_fitness, pop)) #clear fitness and fitness componenets
+            list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
             evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
         else:
             pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs))
