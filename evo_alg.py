@@ -11,6 +11,8 @@ import copy
 import os
 import sys
 
+from warnings import warn
+
 from flatspin.runner import run, run_dist, run_local
 from flatspin.data import Dataset, is_archive_format
 from flatspin.utils import get_default_params, import_class
@@ -191,8 +193,11 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     # sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
 
     # hacks to allow fixed geoms
-    if "model" in kwargs and kwargs["model"] != "generated":
+    if "model" in kwargs and kwargs["model"] != "CustomSpinIce":
         individual_params["fixed_geom"] = True
+    elif ("magnet_angles" in kwargs or " magnet_coords" in kwargs) and not individual_params.get("fixed_geom", False):
+        warn("""You suppplied magnet_angles or magnet_coords, but 'fixed_geom' is False,
+                set -i fixed_geom=True if you do not want to evolve the geometry""")
     if starting_pop:
         try:
             with open(starting_pop, "r") as f:
