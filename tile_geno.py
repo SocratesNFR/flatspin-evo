@@ -1246,7 +1246,7 @@ def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
 def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, img_basepath="", compare="direct",**flatspin_kwargs):
     from analyze_sweep import find_rule
     # \from ca_encoder import CARotateEncoder
-    default_shared_params = {"model": "PinwheelSpinIceDiamond", "run": "local", "encoder": "ca_encoder.CARotateEncoder",
+    default_shared_params = {"run": "local", "encoder": "ca_encoder.CARotateEncoder",
                              "spp": 10, "periods": 1, "timesteps": 10, "basepath": os.path.join(outdir, f"gen{gen}")}
     input = '[[1,1,1],[1,1,0],[1,0,1],[1,0,0],[0,1,1],[0,1,0],[0,0,1],[0,0,0]]'
     init = str([os.path.join(img_basepath, "init_half_0.png"), os.path.join(img_basepath, "init_half_1.png")])
