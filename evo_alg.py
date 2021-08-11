@@ -111,8 +111,8 @@ def save_stats(outdir, pop, minimize_fitness):
     finite_pop = [pop[i] for i in np.where(np.isfinite(fits))[0]]
     out = []
     if len(finite_pop) > 0:
-        best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(finite_pop, key=lambda
-            indv: indv.fitness)
+        best = min(finite_pop, key=lambda indv: indv.fitness) if minimize_fitness else max(
+            finite_pop, key=lambda indv: indv.fitness)
     else:
         best = pop[0]
     out.extend(repr(best))
@@ -273,3 +273,4 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         gen_times.append((datetime.now() - time).total_seconds())
     # best.plot()
     return best
+    

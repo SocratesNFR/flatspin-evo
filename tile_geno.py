@@ -38,9 +38,8 @@ class Individual:
     def set_evolved_params(evolved_params):
         Individual._evolved_params = evolved_params
 
-    def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1,
-                 pheno_size=40, pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None,
-                 fitness_info=None,
+    def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1, pheno_size=40,
+                 pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None, fitness_info=None,
                  tiles=None, init_pheno=True, evolved_params_values=None, fixed_geom=False, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
@@ -59,25 +58,41 @@ class Individual:
         self.fitness = fitness
         self.fitness_components = fitness_components
         self.fitness_info = fitness_info
-        self.evolved_params_values = evolved_params_values if evolved_params_values else {}
+        self.evolved_params_values = (
+            evolved_params_values if evolved_params_values else {}
+        )
         if any((ep not in Individual._evolved_params for ep in self.evolved_params_values)):
             warnings.warn(
-                "Unexpected evolved parameter passed to Individual constructor, this will not be mutated correctly!")
+                "Unexpected evolved parameter passed to Individual constructor, this will not be mutated correctly!"
+            )
         for param in Individual._evolved_params:
             if self.evolved_params_values.get(param) is None:
-                self.evolved_params_values[param] = np.random.uniform(Individual._evolved_params[param]["low"],
-                                                                      Individual._evolved_params[param]["high"],
-                                                                      Individual._evolved_params[param].get("shape"))
+                self.evolved_params_values[param] = np.random.uniform(
+                    Individual._evolved_params[param]["low"],
+                    Individual._evolved_params[param]["high"],
+                    Individual._evolved_params[param].get("shape"),
+                )
         if not self.fixed_geom:
             if mag_h > mag_w:
-                raise Warning("conversion to flatspin assumes magnet height < magnet width!")
+                raise Warning(
+                    "conversion to flatspin assumes magnet height < magnet width!"
+                )
             if tiles is not None and 1 <= len(tiles):
                 if len(tiles) > self.max_tiles:
-                    raise ValueError("Individual has more tiles than the value of 'max_tiles'")
+                    raise ValueError(
+                        "Individual has more tiles than the value of 'max_tiles'"
+                    )
                 self.tiles = tiles
             else:
-                self.tiles = [Tile(mag_w=mag_w, mag_h=mag_h, tile_size=tile_size, max_symbol=max_symbol) for _ in
-                              range(np.random.randint(1, max_tiles + 1))]
+                self.tiles = [
+                    Tile(
+                        mag_w=mag_w,
+                        mag_h=mag_h,
+                        tile_size=tile_size,
+                        max_symbol=max_symbol,
+                    )
+                    for _ in range(np.random.randint(1, max_tiles + 1))
+                ]
             if init_pheno:
                 self.pheno = self.geno2pheno(geom_size=self.pheno_size)
 
@@ -99,14 +114,22 @@ class Individual:
     def copy(self, **overide_kwargs):
         # defines which attributes are used when copying
         # somre params are ignored as need to be deep copied
-        ignore_attributes = ("gen", "evolved_params_values", "pheno", "id", "init_pheno")
+        ignore_attributes = (
+            "gen",
+            "evolved_params_values",
+            "pheno",
+            "id",
+            "init_pheno",
+        )
         params = {k: v for (k, v) in vars(self).items() if k not in ignore_attributes}
         params.update(overide_kwargs)
         new_indv = Individual(**params)
         new_indv.evolved_params_values = deepcopy(self.evolved_params_values)
         # copy attributes that are referenced to unlink
         if not new_indv.fixed_geom:
-            new_indv.tiles = [Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles]
+            new_indv.tiles = [
+                Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles
+            ]
 
         return new_indv
 
@@ -132,10 +155,12 @@ class Individual:
         frontier.append(self.tiles[0][0].copy(created=iter_count))
         frontier[0].symbol.fill(0)
         if "initial_rotation" in self.evolved_params_values:
-            frontier[0].i_rotate(self.evolved_params_values["initial_rotation"], 'centroid')
+            frontier[0].i_rotate(
+                self.evolved_params_values["initial_rotation"], "centroid"
+            )
         frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
 
-        while len(frontier) + len(frozen) < geom_size and len(frontier) > 0 and since_change < no_change_terminator:
+        while (len(frontier) + len(frozen) < geom_size and len(frontier) > 0 and since_change < no_change_terminator):
             if animate:
                 frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
             iter_count += 1
@@ -146,11 +171,10 @@ class Individual:
 
                     for new_mag in new_mags:
                         # check doesnt intersect any magnets and if there are bounds is within them
-                        if not new_mag.is_intersecting(frontier + frozen + new_front) and not (
-                                self.pheno_bounds
-                                and not (-self.pheno_bounds[0] < new_mag.pos[0] < self.pheno_bounds[0]
-                                         and -self.pheno_bounds[1] < new_mag.pos[1] < self.pheno_bounds[1])
-                        ):
+                        if not new_mag.is_intersecting(frontier + frozen + new_front) \
+                            and not (self.pheno_bounds
+                                     and not (-self.pheno_bounds[0] < new_mag.pos[0] < self.pheno_bounds[0]
+                                              and -self.pheno_bounds[1] < new_mag.pos[1] < self.pheno_bounds[1])):
                             new_front.append(new_mag)
 
             frozen.extend(frontier)
@@ -167,14 +191,16 @@ class Individual:
             # plt.show()
             # self.anime.save("anime.mp4")
 
-        return centre_magnets(frozen + frontier)[:geom_size] if np.isfinite(geom_size) else centre_magnets(
-            frozen + frontier)
+        return (centre_magnets(frozen + frontier)[:geom_size]if np.isfinite(geom_size) else
+                centre_magnets(frozen + frontier))
 
     @staticmethod
     def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6)):
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_aspect("equal")
-        bounds = np.vstack(list(map(lambda m: m.xy, [mag for frame in frames for mag in frame])))
+        bounds = np.vstack(
+            list(map(lambda m: m.xy, [mag for frame in frames for mag in frame]))
+        )
         xlim = bounds[:, 0].min(), bounds[:, 0].max()
         ylim = bounds[:, 1].min(), bounds[:, 1].max()
         if title:
@@ -197,8 +223,7 @@ class Individual:
                 for poly in frame:
                     poly.set_color(colours[poly.iterCreated % len(colours)])
         ax.set_facecolor(ax_color)
-        return FuncAnimation(fig, step, frames=len(frames),
-                             fargs=(len(frames) - 1, xlim, ylim, title),
+        return FuncAnimation(fig, step, frames=len(frames), fargs=(len(frames) - 1, xlim, ylim, title),
                              blit=False, interval=interval)
 
     @staticmethod
@@ -227,10 +252,17 @@ class Individual:
         mut_types = []  # valid mutations for individual
 
         if not clone.fixed_geom:
-            mut_types += [Individual.mutate_magnet_pos, Individual.mutate_magnet_angle, Individual.mutate_symbol]
+            mut_types += [
+                Individual.mutate_magnet_pos,
+                Individual.mutate_magnet_angle,
+                Individual.mutate_symbol,
+            ]
             if clone.max_tiles > 1:  # cannot add/remove tiles when max tile is 1
-                if len(clone.tiles) < clone.max_tiles:  # only add new tiles when less than max
-                    mut_types += [Individual.mutate_clone_tile, Individual.mutate_add_rand_tile]
+                if (len(clone.tiles) < clone.max_tiles):  # only add new tiles when less than max
+                    mut_types += [
+                        Individual.mutate_clone_tile,
+                        Individual.mutate_add_rand_tile,
+                    ]
                 if len(clone.tiles) > 1:  # only remove tile when more than 1
                     mut_types += [Individual.mutate_delete_tile]
 
@@ -257,9 +289,8 @@ class Individual:
         return [self.tiles[i] for i in list(np.random.choice(range(len(self.tiles)), size=num, replace=replace))]
 
     def crossover(self, other):
-        """crossover 2 individuls, return any new children as a list """
+        """crossover 2 individuls, return any new children as a list"""
         assert not (self.fixed_geom and len(self.evolved_params_values) < 1), "no free values to crossover"
-
         parents = [self, other]
         np.random.shuffle(parents)
         if not self.fixed_geom:
@@ -283,10 +314,12 @@ class Individual:
             child.age = 0
             child.refresh()
             logging.info(
-                f"ind {child.id} created from {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+                f"ind {child.id} created from {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}"
+            )
         else:
             logging.info(
-                f"Failed crossover: {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}")
+                f"Failed crossover: {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}"
+            )
 
         return [child] if child else []
 
@@ -299,7 +332,9 @@ class Individual:
             poss = (parents[0].tiles[0][i].pos, parents[1].tiles[0][i].pos)
 
             new_angle = np.random.rand() * np.abs(angles[0] - angles[1]) + min(angles)
-            new_pos = np.random.rand() * np.abs(poss[0] - poss[1]) + np.min(poss, axis=0)
+            new_pos = np.random.rand() * np.abs(poss[0] - poss[1]) + np.min(
+                poss, axis=0
+            )
 
             rot = new_angle - child.tiles[0][i].angle
             child.tiles[0][i].i_rotate(rot, "centroid")
@@ -314,11 +349,17 @@ class Individual:
     @staticmethod
     def crossover_tiles(parents):
         num_tiles = (len(parents[0].tiles), len(parents[1].tiles))
-        num_tiles = min(parents[0].max_tiles, np.random.randint(min(num_tiles), max(num_tiles) + 1))
+        num_tiles = min(
+            parents[0].max_tiles, np.random.randint(min(num_tiles), max(num_tiles) + 1)
+        )
 
         from_first_parent = np.random.randint(0, num_tiles + 1)
-        tiles = parents[0].random_tiles(num=min(from_first_parent, len(parents[0].tiles)))
-        tiles += parents[1].random_tiles(num=min(num_tiles - from_first_parent, len(parents[1].tiles)))
+        tiles = parents[0].random_tiles(
+            num=min(from_first_parent, len(parents[0].tiles))
+        )
+        tiles += parents[1].random_tiles(
+            num=min(num_tiles - from_first_parent, len(parents[1].tiles))
+        )
 
         tiles = [tile.copy() for tile in tiles]
         child = parents[0].copy()
@@ -341,8 +382,12 @@ class Individual:
         tile = clone.tiles[np.random.randint(0, len(clone.tiles))]
         x = 1 + np.random.randint(len(tile[1:]))
         copy_mag = tile[x].copy()
-        distance = Individual.gauss_mutate(copy_mag.pos, strength * clone.tile_size / 200, 0,
-                                           clone.tile_size) - copy_mag.pos
+        distance = (
+            Individual.gauss_mutate(
+                copy_mag.pos, strength * clone.tile_size / 200, 0, clone.tile_size
+            )
+            - copy_mag.pos
+        )
         old_pos = copy_mag.pos.tolist()
         copy_mag.i_translate(*distance)
 
@@ -401,7 +446,13 @@ class Individual:
     @staticmethod
     def mutate_add_rand_tile(clone, strength):
         clone.tiles.append(
-            Tile(mag_w=clone.mag_w, mag_h=clone.mag_h, tile_size=clone.tile_size, max_symbol=clone.max_symbol))
+            Tile(
+                mag_w=clone.mag_w,
+                mag_h=clone.mag_h,
+                tile_size=clone.tile_size,
+                max_symbol=clone.max_symbol,
+            )
+        )
         return f"added 1 random tile"
 
     @staticmethod
@@ -409,8 +460,10 @@ class Individual:
         param_name = np.random.choice(list(clone.evolved_params_values))
         mut_param_info = Individual._evolved_params[param_name]
 
-        new_val = Individual.gauss_mutate(clone.evolved_params_values[param_name],
-                                          strength * (mut_param_info["high"] - mut_param_info["low"]) / 200)
+        new_val = Individual.gauss_mutate(
+            clone.evolved_params_values[param_name],
+            strength * (mut_param_info["high"] - mut_param_info["low"]) / 200,
+        )
 
         res_info = f"{param_name} changed {clone.evolved_params_values[param_name]} -> {new_val}"
 
@@ -454,6 +507,7 @@ class Individual:
 
     @staticmethod
     def tessellate(magnets, shape=(5, 1), padding=0, centre=True):
+        magnets = [mag.copy() for mag in magnets]
         polygons = MultiPolygon([mag.as_polygon for mag in magnets])
         minx, miny, maxx, maxy = polygons.bounds
         cell_size = np.array([maxx - minx, maxy - miny])
@@ -487,7 +541,9 @@ class Individual:
 
 
 class Tile(Sequence):
-    def __init__(self, *, tile_size=600, mag_w=220, mag_h=80, max_symbol=1, magnets=None):
+    def __init__(
+        self, *, tile_size=600, mag_w=220, mag_h=80, max_symbol=1, magnets=None
+    ):
         """
         make new random tile from scratch
         """
@@ -498,8 +554,16 @@ class Tile(Sequence):
             self.magnets = magnets
         else:
             # always a magnet at the origin (centre)
-            self.magnets = [Magnet(np.random.randint(0, max_symbol, 2), np.array((tile_size, tile_size)) / 2, np.pi / 2,
-                                   mag_w, mag_h, 0)]
+            self.magnets = [
+                Magnet(
+                    np.random.randint(0, max_symbol, 2),
+                    np.array((tile_size, tile_size)) / 2,
+                    np.pi / 2,
+                    mag_w,
+                    mag_h,
+                    0,
+                )
+            ]
             num_mags = 2  # dangerous to do more
             for _ in range(num_mags - 1):
                 # try to place magnet randomly (throw error after many attempts fail)
@@ -507,10 +571,14 @@ class Tile(Sequence):
                 max_attempts = 50
                 for attempts in range(max_attempts + 1):
                     # make random magnet in tile
-                    new_mag = Magnet(np.random.randint(0, max_symbol, 2),
-                                     np.array(np.random.uniform(high=tile_size, size=2)),
-                                     np.random.uniform(low=0, high=2 * np.pi), mag_w, mag_h, 0
-                                     )
+                    new_mag = Magnet(
+                        np.random.randint(0, max_symbol, 2),
+                        np.array(np.random.uniform(high=tile_size, size=2)),
+                        np.random.uniform(low=0, high=2 * np.pi),
+                        mag_w,
+                        mag_h,
+                        0,
+                    )
 
                     # keep if no overlaps else try again
                     if not new_mag.is_intersecting(self.magnets):
@@ -557,11 +625,17 @@ class Tile(Sequence):
             magnet_symbol_index = 0 if mag.angle < np.pi else -1
 
             # equivalent to 0 if (mag.angle + angle_offset)% (2Pi) < np.pi else -1
-            tile_symbol_index = magnet_symbol_index if angle_offset else (-1 * magnet_symbol_index - 1)
-            if self[origin_index].symbol[tile_symbol_index] != mag.symbol[magnet_symbol_index]:
+            tile_symbol_index = (
+                magnet_symbol_index if angle_offset else (-1 * magnet_symbol_index - 1)
+            )
+            if (
+                self[origin_index].symbol[tile_symbol_index]
+                != mag.symbol[magnet_symbol_index]
+            ):
                 continue
 
-            new_tile = self.copy(current_iter)  # copy tile to use as the new magnets to add
+            # copy tile to use as the new magnets to add
+            new_tile = self.copy(current_iter)
             angle_diff = mag.angle - new_tile[origin_index].angle + angle_offset
             # rotate all magnets in tile (we don't care about the displacement so we can use origin=(0,0))
             new_tile.i_rotate(angle_diff, origin)
@@ -603,15 +677,26 @@ class Magnet:
         if type(other) != Magnet:
             return False
 
-        return (self.symbol == other.symbol and (self.pos == other.pos).all() and
-                self.angle == other.angle and self.mag_w == other.mag_w and
-                self.mag_h == other.mag_h and self.created == other.created)
+        return (
+            self.symbol == other.symbol
+            and (self.pos == other.pos).all()
+            and self.angle == other.angle
+            and self.mag_w == other.mag_w
+            and self.mag_h == other.mag_h
+            and self.created == other.created
+        )
 
     def __ne__(self, other):
         return not self == other
 
     def __repr__(self):
-        return repr({k: v for (k, v) in vars(self).items() if k not in ["as_polygon", "locked", "bound"]})
+        return repr(
+            {
+                k: v
+                for (k, v) in vars(self).items()
+                if k not in ["as_polygon", "locked", "bound"]
+            }
+        )
 
     def init_polygon(self):
         """return polygon repr of magnet and polygon repr of the padding boundary"""
@@ -621,8 +706,12 @@ class Magnet:
         rect = box(min_x, min_y, max_x, max_y)
 
         half_pad = self.padding / 2
-        bounds = box(min_x - half_pad, min_y - half_pad, max_x + half_pad, max_y + half_pad)
-        return rotate(rect, self.angle, use_radians=True), rotate(bounds, self.angle, use_radians=True)
+        bounds = box(
+            min_x - half_pad, min_y - half_pad, max_x + half_pad, max_y + half_pad
+        )
+        return rotate(rect, self.angle, use_radians=True), rotate(
+            bounds, self.angle, use_radians=True
+        )
 
     def is_intersecting(self, others):
         # others may be a magnet or list of magnets
@@ -638,7 +727,7 @@ class Magnet:
     @staticmethod
     def any_intersecting(magnets):
         for i in range(len(magnets)):
-            if magnets[i].is_intersecting(magnets[i + 1:len(magnets)]):
+            if magnets[i].is_intersecting(magnets[i + 1: len(magnets)]):
                 return True
         return False
 
@@ -671,8 +760,10 @@ class Magnet:
     @staticmethod
     def rot(v, angle):
         v = deepcopy(v)
-        v[0], v[1] = (v[0] * np.cos(angle) - v[1] * np.sin(angle),
-                      v[0] * np.sin(angle) + v[1] * np.cos(angle))
+        v[0], v[1] = (
+            v[0] * np.cos(angle) - v[1] * np.sin(angle),
+            v[0] * np.sin(angle) + v[1] * np.cos(angle),
+        )
         return v
 
     def copy(self, *, created=None):
@@ -696,7 +787,8 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     shift = np.array((x_shift, y_shift))
     for mag in magnets:
         mag.pos += shift
-        mag.as_polygon, mag.bound = mag.init_polygon()  # need to remake the polys with new pos
+        # need to remake the polys with new pos
+        mag.as_polygon, mag.bound = mag.init_polygon()
     return magnets
 
 
@@ -708,7 +800,9 @@ def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, **kwargs):
     return outer_pop
 
 
-def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
+def evaluate_outer_find_all(
+    outer_pop, basepath, *, max_value=19, min_value=1, **kwargs
+):
     novelty_file = os.path.join(basepath, "novelty.pkl")
     if not os.path.exists(novelty_file):
         found = [-1] * (1 + max_value - min_value)
@@ -797,9 +891,23 @@ def scale_to_unit(x, upper, lower):
 
 
 def get_default_shared_params(outdir="", gen=None):
-    default_params = {"run": "local", "model": "CustomSpinIce", "encoder": "AngleSine", "H": 0.01, "phi": 90,
-                      "radians": True, "alpha": 30272, "sw_b": 0.4, "sw_c": 1, "sw_beta": 3, "sw_gamma": 3, "spp": 100,
-                      "hc": 0.03, "periods": 10, "neighbor_distance": 1000}
+    default_params = {
+        "run": "local",
+        "model": "CustomSpinIce",
+        "encoder": "AngleSine",
+        "H": 0.01,
+        "phi": 90,
+        "radians": True,
+        "alpha": 30272,
+        "sw_b": 0.4,
+        "sw_c": 1,
+        "sw_beta": 3,
+        "sw_gamma": 3,
+        "spp": 100,
+        "hc": 0.03,
+        "periods": 10,
+        "neighbor_distance": 1000,
+    }
     if gen is not None:
         outdir = os.path.join(outdir, f"gen{gen}")
     default_params["basepath"] = outdir
@@ -811,31 +919,51 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
     sweep_list = sweep_list or [[0, 0, {}]]
 
     if not condition:
-        condition = lambda x: True
-    elif condition == "fixed_size":
-        condition = lambda ind: len(ind.pheno) >= ind.pheno_size
 
-    id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
+        def condition(x):
+            return True
+
+    elif condition == "fixed_size":
+
+        def condition(ind):
+            return len(ind.pheno) >= ind.pheno_size
+
+    id2indv = {
+        individual.id: individual for individual in [p for p in pop if condition(p)]
+    }
 
     run_params = []
     for id, indv in id2indv.items():
         for i, j, rp in sweep_list:
             if indv.fixed_geom:
-                run_params.append(
-                    dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}"))
+                run_params.append(dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}"))
             else:
-                coords = np.array([mag.pos for mag in indv.pheno]) if not indv.fixed_geom else [0]
-                angles = np.array([mag.angle for mag in indv.pheno]) if not indv.fixed_geom else [0]
+                coords = (
+                    np.array([mag.pos for mag in indv.pheno])
+                    if not indv.fixed_geom
+                    else [0]
+                )
+                angles = (
+                    np.array([mag.angle for mag in indv.pheno])
+                    if not indv.fixed_geom
+                    else [0]
+                )
                 run_params.append(
-                    dict(rp, indv_id=id, magnet_coords=coords, magnet_angles=angles, sub_run_name=f"_{i}_{j}"))
+                    dict(
+                        rp,
+                        indv_id=id,
+                        magnet_coords=coords,
+                        magnet_angles=angles,
+                        sub_run_name=f"_{i}_{j}",
+                    )
+                )
 
     return run_params
 
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, do_not_override_default=False,
-                  sweep_params=None,
-                  condition=None, group_by=None, max_jobs=1000, repeat=1, repeat_spec=None, preprocessing=None,
-                  **flatspin_kwargs):
+                  sweep_params=None, condition=None, group_by=None, max_jobs=1000,
+                  repeat=1, repeat_spec=None, preprocessing=None, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -843,7 +971,11 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     """
     if len(pop) < 1:
         return pop
-    sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else []
+    sweep_list = (
+        list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs))
+        if sweep_params
+        else []
+    )
     default_shared = get_default_shared_params(outdir, gen)
     if shared_params is None:
         shared_params = default_shared
@@ -854,9 +986,14 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     shared_params.update(flatspin_kwargs)
 
     if not condition:
-        condition = lambda x: True
+
+        def condition(x):
+            return True
+
     elif condition == "fixed_size":
-        condition = lambda ind: len(ind.pheno) >= ind.pheno_size
+
+        def condition(ind):
+            return len(ind.pheno) >= ind.pheno_size
 
     if run_params is None:
         run_params = get_default_run_params(pop, sweep_list, condition=condition)
@@ -866,9 +1003,10 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
 
     if len(run_params) > 0:
         id2indv = {individual.id: individual for individual in pop}
-        evolved_params = [id2indv[rp["indv_id"]].evolved_params_values for rp in run_params]
+        evolved_params = [
+            id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
+        ]
         evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by)
-
         dataset = Dataset.read(shared_params["basepath"])
         queue = dataset
         if group_by:
@@ -883,7 +1021,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                     fit_components = fit_func(ds)
                     try:
                         fit_components = list(fit_components)
-                    except(TypeError):
+                    except (TypeError):
                         fit_components = [fit_components]
 
                     # assign the fitness of the correct individual
@@ -907,27 +1045,27 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
 
 
 def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000):
-    """ modified from run_sweep.py main()"""
+    """modified from run_sweep.py main()"""
     if not evolved_params:
         evolved_params = []
     model_name = shared_params.pop("model", "CustomSpinIce")
-    model_class = import_class(model_name, 'flatspin.model')
+    model_class = import_class(model_name, "flatspin.model")
     encoder_name = shared_params.get("encoder", "Sine")
-    encoder_class = import_class(encoder_name, 'flatspin.encoder') if type(encoder_name) is str else encoder_name
+    encoder_class = (import_class(encoder_name, "flatspin.encoder") if type(encoder_name) is str else encoder_name)
 
     data_format = shared_params.get("format", "npz")
 
     params = get_default_params(run)
-    params['encoder'] = f'{encoder_class.__module__}.{encoder_class.__name__}'
+    params["encoder"] = f"{encoder_class.__module__}.{encoder_class.__name__}"
     params.update(get_default_params(model_class))
     params.update(get_default_params(encoder_class))
     params.update(shared_params)
 
     info = {
-        'model': f'{model_class.__module__}.{model_class.__name__}',
-        'model_name': model_name,
-        'data_format': data_format,
-        'command': ' '.join(map(shlex.quote, sys.argv)),
+        "model": f"{model_class.__module__}.{model_class.__name__}",
+        "model_name": model_name,
+        "data_format": data_format,
+        "command": " ".join(map(shlex.quote, sys.argv)),
     }
 
     ext = data_format if is_archive_format(data_format) else "out"
@@ -948,12 +1086,14 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
         newparams.update(run_params)
         if evolved_params:
             # get any flatspin params in evolved_params and update run param with them
-            run_params.update({k: v for k, v in evolved_params[i].items() if k in newparams})
+            run_params.update(
+                {k: v for k, v in evolved_params[i].items() if k in newparams}
+            )
         sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
         row = OrderedDict(run_params)
-        row.update({'outdir': outdir})
+        row.update({"outdir": outdir})
         index.append(row)
 
     # Save dataset
@@ -965,10 +1105,10 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
     # print("Starting sweep with {} runs".format(len(dataset)))
     rs = np.random.get_state()
     run_type = shared_params.get("run", "local")
-    if run_type == 'local':
+    if run_type == "local":
         run_local(dataset, False)
 
-    elif run_type == 'dist':
+    elif run_type == "dist":
         run_dist(dataset, wait=wait, max_jobs=max_jobs)
 
     np.random.set_state(rs)
@@ -983,7 +1123,7 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sw
         other_sizes_fractions = []
     if num_angles > 1:
         shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
-    sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else []
+    sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else [])
     run_params = get_default_run_params(pop, sweep_list, condition=flatspin_kwargs.get("condition"))
     frac_run_params = []
     if len(run_params) > 0:
@@ -991,24 +1131,34 @@ def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sw
             rp.setdefault("sub_run_name", "")
 
             for frac in other_sizes_fractions:
-                angles_frac = rp["magnet_angles"][:int(np.ceil(len(rp["magnet_angles"]) * frac))]
-                coords_frac = rp["magnet_coords"][:int(np.ceil(len(rp["magnet_coords"]) * frac))]
-                frp = {"indv_id": rp["indv_id"],
-                       "magnet_coords": coords_frac,
-                       "magnet_angles": angles_frac,
-                       "sub_run_name": rp["sub_run_name"] + f"_frac{frac}"}
+                angles_frac = rp["magnet_angles"][
+                    : int(np.ceil(len(rp["magnet_angles"]) * frac))
+                ]
+                coords_frac = rp["magnet_coords"][
+                    : int(np.ceil(len(rp["magnet_coords"]) * frac))
+                ]
+                frp = {
+                    "indv_id": rp["indv_id"],
+                    "magnet_coords": coords_frac,
+                    "magnet_angles": angles_frac,
+                    "sub_run_name": rp["sub_run_name"] + f"_frac{frac}",
+                }
                 frac_run_params.append(dict(rp, **frp))
             rp["sub_run_name"] += f"_frac{1}"
 
     def fit_func(ds):
         # fitness is number of steps, but ignores steps from first fifth of the run
         steps = read_table(ds.tablefile("steps"))
-        fitn = steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"]
+        fitn = (
+            steps.iloc[-1]["steps"]
+            - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5][
+                "steps"
+            ]
+        )
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params,
-                        run_params=run_params + frac_run_params, repeat=repeat, repeat_spec=repeat_spec,
-                        **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params, run_params=run_params + frac_run_params,
+                        repeat=repeat, repeat_spec=repeat_spec, **flatspin_kwargs)
     return pop
 
 
@@ -1027,7 +1177,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
 
 def majority_fitness(pop, gen, outdir, sweep_params, test_at=None, match=True, **flatspin_kwargs):
     if not test_at:
-        test_at = [.2, .4, .6, .8]
+        test_at = [0.2, 0.4, 0.6, 0.8]
 
     if "test_perc" in sweep_params:
         warnings.warn("majority fitness function overwriting value of 'test_perc'")
@@ -1055,8 +1205,7 @@ def majority_fitness(pop, gen, outdir, sweep_params, test_at=None, match=True, *
             fitn = np.sum(spin.iloc[-1] != majority_symbol)
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, preprocessing=preprocessing, init="random",
-                        sweep_params=sweep_params,
+    pop = flatspin_eval(fit_func, pop, gen, outdir, preprocessing=preprocessing, init="random", sweep_params=sweep_params,
                         **flatspin_kwargs)
     return pop
 
@@ -1068,7 +1217,9 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
     for y in range(num_blocks):
         row = []
         for x in range(num_blocks):
-            a = img[int(x * step):int((x + 1) * step), int(y * step):int((y + 1) * step)]
+            a = img[
+                int(x * step): int((x + 1) * step), int(y * step): int((y + 1) * step)
+            ]
             row.append(np.mean(a))
         l.append(row)
 
@@ -1104,10 +1255,8 @@ def mean_abs_diff_error(y_true, y_pred):
     return np.abs(y_true - y_pred).mean()
 
 
-def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
-                crop_width=None, win_shape=None, win_step=None,
-                cv_folds=10, alpha=1, sweep_params=None, encoder="Constant", angle0=-45, angle1=45, H0=0, H=1000,
-                input=1000, spp=1, **kwargs):
+def xor_fitness(pop, gen, outdir, quantity="spin", grid_size=None, crop_width=None, win_shape=None, win_step=None, cv_folds=10,
+                alpha=1, sweep_params=None, encoder="Constant", angle0=-45, angle1=45, H0=0, H=1000, input=1000, spp=1, **kwargs):
     from sklearn.linear_model import Ridge
     from sklearn.model_selection import KFold, cross_val_score
     from sklearn.metrics import make_scorer, accuracy_score
@@ -1133,9 +1282,17 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         """calculate phi value from logical value"""
         for run_param in run_params:
             ind = id2indv[run_param["indv_id"]]
-            a0 = ind.evolved_params_values["angle0"] if "angle0" in ind.evolved_params_values else angle0
-            a1 = ind.evolved_params_values["angle1"] if "angle1" in ind.evolved_params_values else angle1
-            b0, b1 = [b == '1' for b in run_param["logical_val"]]
+            a0 = (
+                ind.evolved_params_values["angle0"]
+                if "angle0" in ind.evolved_params_values
+                else angle0
+            )
+            a1 = (
+                ind.evolved_params_values["angle1"]
+                if "angle1" in ind.evolved_params_values
+                else angle1
+            )
+            b0, b1 = [b == "1" for b in run_param["logical_val"]]
             run_param["phi"] = diff_bisector(a0, a1, b0, b1)
         return run_params
 
@@ -1174,19 +1331,20 @@ def xor_fitness(pop, gen, outdir, quantity='spin', grid_size=None,
         return fitness_components
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, encoder=encoder, sweep_params=sweep_params, H=H, H0=H0, input=input,
-                        spp=spp,preprocessing=preprocessing, **kwargs)
+                        spp=spp, preprocessing=preprocessing, **kwargs)
     return pop
 
 
 def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
     from mem_capacity import do_mem_capacity
+
     def fit_func(ds):
         delays = np.arange(0, n_delays + 1)
-        spp = int(ds.params['spp'])
+        spp = int(ds.params["spp"])
         t = slice(spp - 1, None, spp)
         scores = do_mem_capacity(ds, delays, t=t)
         fitness_components = scores.mean(axis=-1)
-        print('MC', np.sum(fitness_components), len(ds))
+        print("MC", np.sum(fitness_components), len(ds))
         return fitness_components
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
@@ -1196,7 +1354,10 @@ def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
 
 def correlation_fitness(pop, gen, outdir, target, **kwargs):
     from runAnalysis import fitnessFunction
-    fit_func = lambda x: abs(fitnessFunction(x) - target)
+
+    def fit_func(x):
+        return abs(fitnessFunction(x) - target)
+
     pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
 
     return pop
@@ -1204,13 +1365,14 @@ def correlation_fitness(pop, gen, outdir, target, **kwargs):
 
 def parity_fitness(pop, gen, outdir, n_delays=10, n_bits=3, **kwargs):
     from parity import do_parity
+
     def fit_func(ds):
         delays = np.arange(0, n_delays)
-        spp = int(ds.params['spp'])
+        spp = int(ds.params["spp"])
         t = slice(spp - 1, None, spp)
         scores = do_parity(ds, delays, n_bits, t=t)
         fitness_components = scores.mean(axis=-1)
-        print(f'PARITY{n_bits}', np.sum(fitness_components))
+        print(f"PARITY{n_bits}", np.sum(fitness_components))
         return fitness_components
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
@@ -1231,6 +1393,29 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     return pop
 
 
+def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, **flatspin_kwargs):
+    input = str([list(f"{i:b}".zfill(bit_len)) for i in range(2**bit_len)])
+
+    if not sweep_params:
+        sweep_params = {}
+    if "init" in sweep_params or "input" in sweep_params:
+        warnings.warn("Overiding input in fitness function")
+    sweep_params = dict(sweep_params, input=input)
+
+    def fit_func(datasets):
+        states = None
+        for i, ds in enumerate(datasets):
+            spin = read_table(ds.tablefile("spin"))
+            if states is None:
+                states = np.zeros((*spin.shape, len(datasets)))
+            states[i] = spin.iloc[t]
+        fitn = len(np.unique(states))
+        return fitn
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params, **flatspin_kwargs)
+    return pop
+
+
 def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     id2indv = {individual.id: individual for individual in pop}
     shared_params = {"spp": 1, "periods": 1, "H": 0, "neighbor_distance": 1}
@@ -1238,18 +1423,31 @@ def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     def fit_func(ds):
         return len(id2indv[ds.index["indv_id"].values[0]].pheno)
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: True, shared_params=shared_params,
-                        **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: True,
+                        shared_params=shared_params, **flatspin_kwargs)
     return pop
 
 
-def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, img_basepath="", compare="direct",**flatspin_kwargs):
+def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, img_basepath="", compare="direct",
+                    **flatspin_kwargs):
     from analyze_sweep import find_rule
+
     # \from ca_encoder import CARotateEncoder
-    default_shared_params = {"run": "local", "encoder": "ca_encoder.CARotateEncoder",
-                             "spp": 10, "periods": 1, "timesteps": 10, "basepath": os.path.join(outdir, f"gen{gen}")}
-    input = '[[1,1,1],[1,1,0],[1,0,1],[1,0,0],[0,1,1],[0,1,0],[0,0,1],[0,0,0]]'
-    init = str([os.path.join(img_basepath, "init_half_0.png"), os.path.join(img_basepath, "init_half_1.png")])
+    default_shared_params = {
+        "run": "local",
+        "encoder": "ca_encoder.CARotateEncoder",
+        "spp": 10,
+        "periods": 1,
+        "timesteps": 10,
+        "basepath": os.path.join(outdir, f"gen{gen}"),
+    }
+    input = "[[1,1,1],[1,1,0],[1,0,1],[1,0,0],[0,1,1],[0,1,0],[0,0,1],[0,0,0]]"
+    init = str(
+        [
+            os.path.join(img_basepath, "init_half_0.png"),
+            os.path.join(img_basepath, "init_half_1.png"),
+        ]
+    )
     if not sweep_params:
         sweep_params = {}
     if "init" in sweep_params or "input" in sweep_params:
@@ -1263,21 +1461,24 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
         group_by.append("random_seed")
 
     if compare == "langton":
-        langtons_table = {x: '{0:08b}'.format(x).count('1') / 8 for x in range(0, 256)} # lambda[rule]
+        langtons_table = {
+            x: "{0:08b}".format(x).count("1") / 8 for x in range(0, 256)
+        }  # lambda[rule]
     elif compare == "equiv":
         from ca_rule_tools import eq_rules
+
         equiv_rules = list(filter(lambda x: target in x, eq_rules))[0]
     id2indv = {individual.id: individual for individual in pop}
 
     def fit_func(ds):
         """takes a group of ds of same indv_id and seed (one full run of all ca inputs on a system)"""
         rule = find_rule((None, ds))[1]
-        if compare=="langton":
+        if compare == "langton":
             fitn = abs(langtons_table[rule] - langtons_table[target])
         elif compare == "equiv":
             fitn = int(rule in equiv_rules)
-        else:#direct compare
-            fitn = int(rule==target)
+        else:  # direct compare
+            fitn = int(rule == target)
         id = ds.index["indv_id"].values[0]
         indv = id2indv[id]
         indv.fitness_info = [] if indv.fitness_info is None else indv.fitness_info
@@ -1285,10 +1486,85 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
 
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params,
-                        shared_params=default_shared_params, do_not_override_default=True,
-                        **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params, shared_params=default_shared_params,
+                        do_not_override_default=True, **flatspin_kwargs)
     return pop
+
+
+def stray_field_ca_fitness(pop, gen, outdir, sweep_params, grid_size=(5, 1), target="ClassIII,ClassIV", angle0=0,
+                           angle1=np.pi, padding=80, group_by=None, **flatspin_kwargs):
+    from ca_rule_tools import full_classes
+    """target can be rule number: 93
+    a equivelence class : 'eq93'
+    or 1 or more classes: 'ClassIV' / 'ClassIII,ClassIV'
+    """
+
+    if "init_input" in sweep_params:
+        warnings.warn("majority fitness function overwriting value of 'init_input'")
+
+    if type(grid_size) in (int, float):
+        grid_size = (grid_size, grid_size)
+    sweep_params = dict(
+        sweep_params, init_input=str(list(range(2**(grid_size[0] * grid_size[1]))))
+    )
+
+    if not group_by:
+        group_by = []
+    if "indv_id" not in group_by:
+        group_by.append("indv_id")
+
+    # parse target
+    if type(target) is not str or target.isnumeric():
+        target = (int(target),)
+    elif "eq" in target:
+        target = (int(target[2:]),)
+    elif "Class" in target:
+        target = frozenset((rule for class_num in target for rule in full_classes[class_num[len("Class"):]]))
+
+    id2indv = {individual.id: individual for individual in pop}
+
+    def preprocessing(run_params):
+        """do tessalting"""
+        for run in run_params:
+            indv = id2indv[run["indv_id"]]
+            tess = Individual.tessellate(indv.pheno, grid_size, padding=padding)
+            run["magnet_angles"] = np.array([mag.angle for mag in tess])
+            run["magnet_coords"] = np.array([mag.pos for mag in tess])
+
+        return run_params
+
+    def fit_func(ds):  # need to group to check rule, or do something clever in outer eval
+        rule_table = OrderedDict()
+        for run in ds:
+            mag = load_output(run, "mag", t=-1, grid_size=grid_size, flatten=False)
+            state = mag[:, 1] > 0  # check y comp as we move join and stimulate in x
+            init_input = int(run.index['init_input'])
+            binput = bin(init_input)[2:]
+            rule_table[binput] = state
+
+        rules = check_ca_rules(rule_table)
+        # find class
+        # calc hamming dist i.e sum(xor())
+    pop = flatspin_eval(fit_func, pop, gen, outdir, preprocessing=preprocessing,
+                        sweep_params=sweep_params, **flatspin_kwargs)
+    return pop
+
+
+def check_ca_rules(rule_table):
+    num_cells = len(rule_table.keys()[0])
+    rules = []
+    for i in range(1, num_cells-1):
+        inputs = [k[i-1:i+1] for k in rule_table]
+        outputs = [rule_table[k][i] for k in rule_table]
+        rules.append(check_ca_rule(inputs, outputs))
+    return rules
+
+
+def check_ca_rule(inputs, outputs):
+    [y for _, y in sorted(zip(map(int, inputs), outputs), reverse=1)]
+    sorted_outs = [outputs[i] for i in sorted(range(len(outputs)), key=lambda x: int(inputs[x]), reverse=1)]
+    rule_num = int("".join(sorted_outs), 2)
+    return rule_num
 
 
 def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8), grid_size=4, **flatspin_kwargs):
@@ -1300,13 +1576,17 @@ def std_grid_field_fitness(pop, gen, outdir, angles=np.linspace(0, 2 * np.pi, 8)
         grid_size = (grid_size, grid_size)
 
         def fit_func(ds):
-            mag = load_output(ds, "mag", t=ds.params["spp"], grid_size=grid_size, flatten=False)
+            mag = load_output(
+                ds, "mag", t=ds.params["spp"], grid_size=grid_size, flatten=False
+            )
             magnitude = np.linalg.norm(mag, axis=3)
             summ = np.sum(magnitude, axis=0)
             fitn = np.std(summ) * np.mean(summ)
             return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params, **flatspin_kwargs)
+    pop = flatspin_eval(
+        fit_func, pop, gen, outdir, shared_params=shared_params, **flatspin_kwargs
+    )
     return pop
 
 
@@ -1342,7 +1622,9 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
     def condition(indv):
         x, y = get_range(indv.poss)
 
-        return (0.5 * y <= x <= 2 * y) and not (fixed_size and len(indv.pheno) < indv.pheno_size)
+        return (0.5 * y <= x <= 2 * y) and not (
+            fixed_size and len(indv.pheno) < indv.pheno_size
+        )
 
     id2indv = {individual.id: individual for individual in pop}
 
@@ -1355,33 +1637,43 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
         """
         # fitness is std of the magnitudes of the cells minus std of the number of magnets in each cell
         fitn = np.std([magnitude[x][y] for x, y in cells_with_mags]) - \
-               np.std([len(indv.grid.point_index([x, y])) for x, y in cells_with_mags])
+               np.std([len(indv.grid.point_index([x, y]))
+                      for x, y in cells_with_mags])
         """
-        fitn = abs(((np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold) * 2 - 1).sum())
+        fitn = abs(
+            (
+                (np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold)
+                * 2
+                - 1
+            ).sum()
+        )
 
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    pop = flatspin_eval(
+        fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs
+    )
     return pop
 
 
 def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, **kwargs):
-    known_fits = {"target_state_num": target_state_num_fitness,
-                  "state_num": state_num_fitness,
-                  "flips": flips_fitness,
-                  "std_grid_field": std_grid_field_fitness,
-                  "target_order_percent": target_order_percent_fitness,
-                  "default": evaluate_outer,
-                  "find_all": evaluate_outer_find_all,
-                  "pheno_size": pheno_size_fitness,
-                  "image": image_match_fitness,
-                  "mem_capacity": mem_capacity_fitness,
-                  "parity": parity_fitness,
-                  "majority": majority_fitness,
-                  "correlation": correlation_fitness,
-                  "xor": xor_fitness,
-                  "ca_rule": ca_rule_fitness
-                  }
+    known_fits = {
+        "target_state_num": target_state_num_fitness,
+        "state_num": state_num_fitness,
+        "flips": flips_fitness,
+        "std_grid_field": std_grid_field_fitness,
+        "target_order_percent": target_order_percent_fitness,
+        "default": evaluate_outer,
+        "find_all": evaluate_outer_find_all,
+        "pheno_size": pheno_size_fitness,
+        "image": image_match_fitness,
+        "mem_capacity": mem_capacity_fitness,
+        "parity": parity_fitness,
+        "majority": majority_fitness,
+        "correlation": correlation_fitness,
+        "xor": xor_fitness,
+        "ca_rule": ca_rule_fitness,
+    }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 
@@ -1389,35 +1681,69 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
     from flatspin.cmdline import StoreKeyValue, eval_params
 
     parser = argparse.ArgumentParser(description=__doc__)
 
     # common
-    parser.add_argument('-o', '--output', metavar='FILE',
-                        help=r'¯\_(ツ)_/¯')
-    parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
-                        help=r'name of the log file to create')
-    parser.add_argument('-p', '--parameter', action=StoreKeyValue, default={},
-                        help="param passed to flatspin and inner evaluate fitness function")
-    parser.add_argument('-s', '--sweep_param', action=StoreKeyValue, default=OrderedDict(),
-                        help="flatspin param to be swept on each Individual evaluation")
-    parser.add_argument('-n', '--repeat', type=int, default=1, metavar='N',
-                        help='repeat each flatspin run N times (default: %(default)s)')
-    parser.add_argument('-ns', '--repeat-spec', action=StoreKeyValue, metavar='key=SPEC',
-                        help='repeat each flatspin run according to key=SPEC')
-    parser.add_argument('-e', '--evolved_param', action=StoreKeyValue, default={},
-                        help="""param passed to flatspin and inner evaluate that is under evolutionary control, format: -e param_name=[low, high] or -e param_name=[low, high, shape*]
-                                int only values not supported""")
-    parser.add_argument('--evo-rotate', action='store_true', help='short hand for "-e initial_rotation=[0,2*np.pi]"')
-    parser.add_argument('-i', '--individual_param', action=StoreKeyValue, default={},
-                        help="param passed to Individual constructor")
-    parser.add_argument('-f', '--outer_eval_param', action=StoreKeyValue, default={},
-                        help="param past to outer evaluate fitness function")
-    parser.add_argument('--group-by', nargs='*',
-                        help='group by parameter(s) for fitness evaluation')
+    parser.add_argument("-o", "--output", metavar="FILE", help=r"¯\_(ツ)_/¯")
+    parser.add_argument("-l", "--log", metavar="FILE", default="evo.log", help=r"name of the log file to create")
+    parser.add_argument("-p", "--parameter", action=StoreKeyValue, default={},
+                        help="param passed to flatspin and inner evaluate fitness function",)
+    parser.add_argument(
+        "-s",
+        "--sweep_param",
+        action=StoreKeyValue,
+        default=OrderedDict(),
+        help="flatspin param to be swept on each Individual evaluation",
+    )
+    parser.add_argument(
+        "-n",
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="repeat each flatspin run N times (default: %(default)s)",
+    )
+    parser.add_argument(
+        "-ns",
+        "--repeat-spec",
+        action=StoreKeyValue,
+        metavar="key=SPEC",
+        help="repeat each flatspin run according to key=SPEC",
+    )
+    parser.add_argument(
+        "-e",
+        "--evolved_param",
+        action=StoreKeyValue,
+        default={},
+        help="""param passed to flatspin and inner evaluate that is under evolutionary control, format: -e param_name=[low, high] or -e param_name=[low, high, shape*]
+                                int only values not supported""",
+    )
+    parser.add_argument(
+        "--evo-rotate",
+        action="store_true",
+        help='short hand for "-e initial_rotation=[0,2*np.pi]"',
+    )
+    parser.add_argument(
+        "-i",
+        "--individual_param",
+        action=StoreKeyValue,
+        default={},
+        help="param passed to Individual constructor",
+    )
+    parser.add_argument(
+        "-f",
+        "--outer_eval_param",
+        action=StoreKeyValue,
+        default={},
+        help="param past to outer evaluate fitness function",
+    )
+    parser.add_argument(
+        "--group-by", nargs="*", help="group by parameter(s) for fitness evaluation"
+    )
 
     args = parser.parse_args()
 
@@ -1429,8 +1755,14 @@ if __name__ == '__main__':
     logpath = os.path.join(outpath, args.log)
     os.makedirs(outpath)
     logging.basicConfig(filename=logpath, level=logging.INFO)
-    main(outdir=args.output, **eval_params(args.parameter), evolved_params=evolved_params,
-         individual_params=eval_params(args.individual_param),
-         outer_eval_params=eval_params(args.outer_eval_param),
-         sweep_params=args.sweep_param, repeat=args.repeat,
-         repeat_spec=args.repeat_spec, group_by=args.group_by)
+    main(
+        outdir=args.output,
+        **eval_params(args.parameter),
+        evolved_params=evolved_params,
+        individual_params=eval_params(args.individual_param),
+        outer_eval_params=eval_params(args.outer_eval_param),
+        sweep_params=args.sweep_param,
+        repeat=args.repeat,
+        repeat_spec=args.repeat_spec,
+        group_by=args.group_by,
+    )
