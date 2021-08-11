@@ -800,9 +800,7 @@ def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, **kwargs):
     return outer_pop
 
 
-def evaluate_outer_find_all(
-    outer_pop, basepath, *, max_value=19, min_value=1, **kwargs
-):
+def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
     novelty_file = os.path.join(basepath, "novelty.pkl")
     if not os.path.exists(novelty_file):
         found = [-1] * (1 + max_value - min_value)
@@ -1393,7 +1391,7 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     return pop
 
 
-def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, **flatspin_kwargs):
+def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, **flatspin_kwargs):
     input = str([list(f"{i:b}".zfill(bit_len)) for i in range(2**bit_len)])
 
     if not sweep_params:
@@ -1401,6 +1399,11 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, **f
     if "init" in sweep_params or "input" in sweep_params:
         warnings.warn("Overiding input in fitness function")
     sweep_params = dict(sweep_params, input=input)
+
+    if not group_by:
+        group_by = []
+    if "indv_id" not in group_by:
+        group_by.append("indv_id")
 
     def fit_func(datasets):
         states = None
@@ -1412,7 +1415,7 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, **f
         fitn = len(np.unique(states))
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **flatspin_kwargs)
     return pop
 
 
@@ -1673,6 +1676,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         "correlation": correlation_fitness,
         "xor": xor_fitness,
         "ca_rule": ca_rule_fitness,
+        "state_num2": state_num_fitness2,
     }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
