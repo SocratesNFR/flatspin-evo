@@ -1412,7 +1412,7 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
             if states is None:
                 states = np.zeros((len(datasets), *spin.iloc[t].shape))
             states[i] = spin.iloc[t]
-        fitn = len(np.unique(states))
+        fitn = len(np.unique(states), axis=0)
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **flatspin_kwargs)
