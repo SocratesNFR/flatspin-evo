@@ -1410,7 +1410,7 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
         for i, ds in enumerate(datasets):
             spin = read_table(ds.tablefile("spin"))
             if states is None:
-                states = np.zeros((*spin.iloc[t].shape, len(datasets)))
+                states = np.zeros((len(datasets), *spin.iloc[t].shape))
             states[i] = spin.iloc[t]
         fitn = len(np.unique(states))
         return fitn
