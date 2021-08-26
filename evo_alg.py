@@ -18,6 +18,8 @@ from flatspin.data import Dataset, is_archive_format
 from flatspin.utils import get_default_params, import_class
 from flatspin.sweep import sweep
 
+import pickle as pkl
+
 
 def rainbow_colours(num):
     cmap = plt.get_cmap('gist_rainbow')
@@ -171,6 +173,11 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
             dataset.params = ds.params
 
 
+def save_snapshot(outdir, pop):
+    with open(os.path.join(outdir, "snapshot.pkl"), "wb") as f:
+        pkl.dump([repr(indv) for indv in pop], f)
+
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
@@ -262,6 +269,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         dataset.save()
 
         best = save_stats(outdir, pop, minimize_fitness)
+        save_snapshot(outdir, pop)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
                 (minimize_fitness and best.fitness <= stop_at_fitness) or
                 ((not minimize_fitness) and best.fitness >= stop_at_fitness)

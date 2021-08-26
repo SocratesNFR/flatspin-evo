@@ -484,6 +484,17 @@ class Individual:
             t[1].i_set_rot(0)
             t[1].i_set_pos(t[0].pos[0] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[0],
                            t[0].pos[1] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[1])
+        elif name == "ising":
+            ind = Individual(init_pheno=False, max_tiles=2, **kwargs)
+            t1 = ind.tiles[0]
+            t1[1].i_set_rot(t1[0].angle)
+            t1[1].i_set_pos(t1[0].pos[0],
+                            t1[0].pos[1] + t1[1].mag_w + t1[1].padding + min_dist[1])
+            t2 = t1.copy()
+            t2[1].i_set_pos(t2[0].pos[0] + t2[0].mag_h + t2[0].padding + min_dist[0],
+                            t2[0].pos[1])
+            ind.tiles = [t1, t2]
+
         elif name == "pinwheel":
             ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
             t = ind.tiles[0]
