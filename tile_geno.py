@@ -822,7 +822,7 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
 
     for i in outer_pop:
         fit = np.sum(i.fitness_components)
-        if not np.isfinite(fit):
+        if not np.isfinite(fit) or fit > max_value or fit < min_value:
             i.fitness = np.nan
             continue
 
