@@ -111,9 +111,11 @@ class Individual:
         ignore_attributes = ("pheno",)
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-    def copy(self, **overide_kwargs):
+    def copy(self, refresh=True, **overide_kwargs):
         # defines which attributes are used when copying
         # somre params are ignored as need to be deep copied
+        # individual must be refreshed after cloning for to build correct phenotype 
+        # (this can be set to False if the refresh will be done manually later)
         ignore_attributes = (
             "gen",
             "evolved_params_values",
@@ -123,14 +125,15 @@ class Individual:
         )
         params = {k: v for (k, v) in vars(self).items() if k not in ignore_attributes}
         params.update(overide_kwargs)
-        new_indv = Individual(**params)
+        new_indv = Individual(init_pheno=False, **params)
         new_indv.evolved_params_values = deepcopy(self.evolved_params_values)
         # copy attributes that are referenced to unlink
         if not new_indv.fixed_geom:
             new_indv.tiles = [
                 Tile(magnets=[mag.copy() for mag in tile]) for tile in new_indv.tiles
             ]
-
+        if refresh:
+            new_indv.refresh()
         return new_indv
 
     @staticmethod
@@ -158,7 +161,8 @@ class Individual:
             frontier[0].i_rotate(
                 self.evolved_params_values["initial_rotation"], "centroid"
             )
-        frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
+        if animate:
+            frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
 
         while (len(frontier) + len(frozen) < geom_size and len(frontier) > 0 and since_change < no_change_terminator):
             if animate:
@@ -184,7 +188,7 @@ class Individual:
                 max_len = len(frontier) + len(frozen)
             else:
                 since_change += 1
-            frames.append(list(map(lambda m: m.as_patch(), frontier + frozen)))
+            
 
         if animate:
             self.anime = Individual.frames2animation(frames)
@@ -195,7 +199,7 @@ class Individual:
                 centre_magnets(frozen + frontier))
 
     @staticmethod
-    def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6)):
+    def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6), axis_off=False):
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_aspect("equal")
         bounds = np.vstack(
@@ -214,6 +218,12 @@ class Individual:
                 ax.set_title(title[i] if len(title) > i else title[-1])
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
+            if axis_off:
+                plt.axis('off')
+                ax.add_artist(ax.patch)
+                ax.patch.set_zorder(-1)
+                fig.subplots_adjust(left=None, bottom=None, right=None, wspace=None, hspace=None)
+
 
             fig.canvas.draw()
 
@@ -248,7 +258,7 @@ class Individual:
 
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
-        clone = self.copy(init_pheno=False)
+        clone = self.copy(refresh=False)
         mut_types = []  # valid mutations for individual
 
         if not clone.fixed_geom:
@@ -326,7 +336,7 @@ class Individual:
     @staticmethod
     def crossover_single_tile(parents):
         """is affected by order of parents (shuffle before calling)"""
-        child = parents[0].copy(init_pheno=False)
+        child = parents[0].copy(refresh=False)
         for i in range(1, len(child.tiles[0])):  # probably just [1]
             angles = (parents[0].tiles[0][i].angle, parents[1].tiles[0][i].angle)
             poss = (parents[0].tiles[0][i].pos, parents[1].tiles[0][i].pos)
@@ -362,7 +372,7 @@ class Individual:
         )
 
         tiles = [tile.copy() for tile in tiles]
-        child = parents[0].copy()
+        child = parents[0].copy(refresh=False)
         child.tiles = tiles
         return child
 
@@ -729,7 +739,7 @@ class Magnet:
         if type(others) is not list:
             others = [others]
         prepped_poly = prep(self.bound)
-
+        
         for o in others:
             if prepped_poly.intersects(o.bound):
                 return True
@@ -1670,7 +1680,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
     return pop
 
 
-def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, **kwargs):
+def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, calculate_fit_only=False, **kwargs):
     known_fits = {
         "target_state_num": target_state_num_fitness,
         "state_num": state_num_fitness,
@@ -1692,7 +1702,10 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
 
-    return ea.main(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
+    if calculate_fit_only:
+        return ea.only_run_fitness_func(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
+    else:
+        return ea.main(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
 
 
 # m = main(outdir=r"results\flatspinTile26",inner=flipsMaxFitness, popSize=3, generationNum=10)
@@ -1759,7 +1772,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--group-by", nargs="*", help="group by parameter(s) for fitness evaluation"
     )
-
+    parser.add_argument(
+        "--calculate-fit-only",
+        action="store_true",
+        help="use if you only want to run a fitness func once on some individuals (don't run EA)",
+    )
     args = parser.parse_args()
 
     evolved_params = eval_params(args.evolved_param)
@@ -1780,4 +1797,5 @@ if __name__ == "__main__":
         repeat=args.repeat,
         repeat_spec=args.repeat_spec,
         group_by=args.group_by,
+        calculate_fit_only=args.calculate_fit_only,
     )

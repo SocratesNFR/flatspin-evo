@@ -178,6 +178,43 @@ def save_snapshot(outdir, pop):
         pkl.dump([repr(indv) for indv in pop], f)
 
 
+def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
+        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, **kwargs):
+
+    check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
+    check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
+    if check_args:
+        raise RuntimeError(f"param '{check_args[0]}' appears in multiple param groups")
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
+    if "model" in kwargs and kwargs["model"] != "CustomSpinIce":
+        individual_params["fixed_geom"] = True
+    elif ("magnet_angles" in kwargs or " magnet_coords" in kwargs) and not individual_params.get("fixed_geom", False):
+        warn("""You suppplied magnet_angles or magnet_coords, but 'fixed_geom' is False,
+                set -i fixed_geom=True if you do not want to evolve the geometry""")
+
+    assert starting_pop, "starting population is required"
+    try:
+        with open(starting_pop, "r") as f:
+            starting_pop = f.read().splitlines()
+    except Exception:
+        pass
+    pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
+
+    pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+    pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
+
+
+    index = pd.DataFrame()
+    params = None  # to be added by update_superdataset
+    info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
+    dataset = Dataset(index, params, info, basepath=outdir)
+
+    update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
+    dataset.save()
+
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
