@@ -531,7 +531,7 @@ class Individual:
         magnets = [mag.copy() for mag in magnets]
         polygons = MultiPolygon([mag.as_polygon for mag in magnets])
         minx, miny, maxx, maxy = polygons.bounds
-        cell_size = np.array([maxx - minx, maxy - miny])
+        cell_size = np.array([maxx - minx, maxy - miny]) + padding
         first_row = [mag.copy() for mag in magnets]
         for col in range(1, shape[0]):
             new_col = [mag.copy() for mag in magnets]
