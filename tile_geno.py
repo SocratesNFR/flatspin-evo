@@ -14,7 +14,7 @@ from time import sleep
 import evo_alg as ea
 from PIL import Image
 
-from flatspin.data import Dataset, read_table, load_output, is_archive_format
+from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column
 from flatspin.grid import Grid
 from flatspin.utils import get_default_params, import_class
 from flatspin.runner import run, run_dist, run_local
@@ -909,7 +909,7 @@ def scale_to_unit(x, upper, lower):
     return (x - lower) / (upper - lower)
 
 
-def get_default_shared_params(outdir="", gen=None):
+def get_default_shared_params(outdir="", gen=None, select_param=None):
     default_params = {
         "run": "local",
         "model": "CustomSpinIce",
@@ -927,6 +927,8 @@ def get_default_shared_params(outdir="", gen=None):
         "periods": 10,
         "neighbor_distance": 1000,
     }
+    if select_param is not None:
+        return default_params[select_param]
     if gen is not None:
         outdir = os.path.join(outdir, f"gen{gen}")
     default_params["basepath"] = outdir
@@ -1412,7 +1414,8 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     return pop
 
 
-def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, **flatspin_kwargs):
+def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None, **flatspin_kwargs):
+    from scipy.stats import mode
     input = str([list(f"{i:b}".zfill(bit_len)) for i in range(2**bit_len)])
 
     if not sweep_params:
@@ -1425,20 +1428,67 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
         group_by = []
     if "indv_id" not in group_by:
         group_by.append("indv_id")
+    id2indv = {individual.id: individual for individual in pop}
+    nndist = flatspin_kwargs.get("neighbor_dist", get_default_shared_params(select_param="neighbor_distance"))
 
-    def fit_func(datasets):
+    total_spinices = np.prod(tessellate_shape) if tessellate_shape else 1
+    
+    if t == -1:
+        filter = lambda df: df["t"] == df["t"].max()
+    else:
+        filter = lambda df: df["t"] == t
+
+    def preprocessing(run_params):
+        if tessellate_shape is not None:
+            # do tessellating
+            total_spinices = np.prod(tessellate_shape)
+            for run in run_params:
+                indv = id2indv[run["indv_id"]]
+                tess = Individual.tessellate(indv.pheno, tessellate_shape, padding=2*nndist)
+                run["magnet_angles"] = np.array([mag.angle for mag in tess])
+                run["magnet_coords"] = np.array([mag.pos for mag in tess])
+                run["labels"] = [(num_ASIs, num_spins) for num_ASIs in range(total_spinices)
+                                    for num_spins in range(len(indv.pheno))]
+
+        return run_params
+
+    def fit_func(ds):
         states = None
-        for i, ds in enumerate(datasets):
-            spin = read_table(ds.tablefile("spin"))
-            if states is None:
-                states = np.zeros((len(datasets), *spin.iloc[t].shape))
-            states[i] = spin.iloc[t]
-        fitn = len(np.unique(states, axis=0))
+
+        spin = better_read_tables(ds.tablefile("spin"), filter)
+
+        state_num = []
+        for cell in range(total_spinices):
+            if total_spinices > 1:
+                cell_spin = spin[match_column(f"spin({cell},*)", spin)]
+            else:
+                cell_spin = spin[match_column("spin*", spin)]
+            state_num.append(len(cell_spin.drop_duplicates()))
+
+        if len(state_num) == 1:
+            fitn = state_num[0]
+        else:  # if using disorder find mode and see if 70% share else give nan
+            mode_res = mode(state_num)
+            if mode_res.count[0]/len(state_num) > 0.7:
+                fitn = mode_res.mode[0]
+            else:
+                fitn = np.nan
+
         return fitn
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
     return pop
 
+
+def better_read_tables(filenames, filter=None, index_col=None):
+    dfs = [read_table(f, index_col) for f in filenames]
+    if filter is not None:
+        dfs = [df[filter(df)] for df in dfs]
+
+    table = dfs[0]
+    for df in dfs[1:]:
+        table = table.append(df)
+    return table
 
 def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     id2indv = {individual.id: individual for individual in pop}
