@@ -202,8 +202,8 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
         pass
     pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
 
-    pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
-    pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
+    evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+    evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
 
 
     index = pd.DataFrame()
@@ -251,8 +251,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
     else:
         pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    pop = evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
-    pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
+    evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+    evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
     gen_times = []
 
     index = pd.DataFrame()
@@ -293,8 +293,9 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
             evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
         else:
-            pop.extend(evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs))
-        pop = evaluate_outer(pop, basepath=outdir, **outer_eval_params)
+            evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+            pop.extend(new_kids)
+        evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
 
         # Select
         print("    Select")

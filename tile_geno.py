@@ -111,6 +111,14 @@ class Individual:
         ignore_attributes = ("pheno",)
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
+    @property
+    def coords(self):
+        return np.array([mag.pos for mag in self.pheno]) if self.pheno else None
+
+    @property
+    def angles(self):
+        return np.array([mag.angle for mag in self.pheno]) if self.pheno else None
+
     def copy(self, refresh=True, **overide_kwargs):
         # defines which attributes are used when copying
         # somre params are ignored as need to be deep copied
@@ -188,7 +196,6 @@ class Individual:
                 max_len = len(frontier) + len(frozen)
             else:
                 since_change += 1
-            
 
         if animate:
             self.anime = Individual.frames2animation(frames)
@@ -527,7 +534,7 @@ class Individual:
         return ind
 
     @staticmethod
-    def tessellate(magnets, shape=(5, 1), padding=0, centre=True):
+    def tessellate(magnets, shape=(5, 1), padding=0, centre=True, return_labels=False):
         magnets = [mag.copy() for mag in magnets]
         polygons = MultiPolygon([mag.as_polygon for mag in magnets])
         minx, miny, maxx, maxy = polygons.bounds
@@ -547,6 +554,11 @@ class Individual:
         result.extend(first_row)
         if centre:
             centre_magnets(result)
+
+        if return_labels:
+            labels = [(x, y) for x in range(len(magnets)) for y in range(np.prod(shape))]
+            return result, labels
+
         return result
 
     def plot(self, facecolor=None, edgecolor=None):
@@ -818,7 +830,58 @@ def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, **kwargs):
     """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
         i.fitness = acc(i.fitness_components)
-    return outer_pop
+
+
+def ignore_NaN_fits(func):
+    """decorator to set individuals with nan in their fitness components to have nan fitness,
+    and only propergates non-nan individuals to the decorated function"""
+    def wrapper(outer_pop, *args, **kwargs):
+        non_nans = []
+        for indv in outer_pop:
+            if np.isnan(indv.fitness_components).any():
+                indv.fitness = np.nan
+            else:
+                non_nans.append(indv)
+
+        if len(non_nans) > 0:
+            func(non_nans, *args, **kwargs)
+
+    return wrapper
+
+
+@ignore_NaN_fits
+def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=False, plot_bounds=None, gen=0, **kwargs):
+    from scipy.spatial import cKDTree
+    novelty_file = os.path.join(basepath, "noveltyTree.pkl")
+    pop_fitness_components = [indv.fitness_components for indv in outer_pop]
+
+    # if no novelty tree exists, create one and give individuals fitness = 0
+    if not os.path.exists(novelty_file):
+        kdTree = cKDTree(pop_fitness_components)
+        for indv in outer_pop:
+            indv.fitness = 0
+    else:
+        # use the novelty tree to find the fitness, then update and save the new tree
+        with open(novelty_file, "rb") as f:
+            kdTree = pkl.load(f)
+        kdFitness = kdTree.query(pop_fitness_components, k=kNeigbours)[0].mean(axis=1)
+        for indv, fit in zip(outer_pop, kdFitness):
+            indv.fitness = fit
+        kdTree = cKDTree(np.vstack((kdTree.data, pop_fitness_components)))
+
+    with open(novelty_file, "wb") as f:
+        pkl.dump(kdTree, f)
+
+    if plot:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+        ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "bo")
+        fit_comp_array = np.array(pop_fitness_components)
+        ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "ro")
+        if plot_bounds is not None:
+            ax.set_xlim(plot_bounds[0])
+            ax.set_ylim(plot_bounds[1])
+        plt.savefig(os.path.join(basepath, f"novelty{gen}.png"))
+        plt.close(fig)
 
 
 def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
@@ -859,7 +922,7 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
         pkl.dump((found, found_id), f)
     print(found)
     print(found_id)
-    return outer_pop
+
 
 
 def dist2missing(x, found, missing=-1):
@@ -1414,7 +1477,7 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     return pop
 
 
-def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None, **flatspin_kwargs):
+def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None, squint_grid_size=None, polar_coords=True,**flatspin_kwargs):
     from scipy.stats import mode
     input = str([list(f"{i:b}".zfill(bit_len)) for i in range(2**bit_len)])
 
@@ -1432,7 +1495,12 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
     nndist = flatspin_kwargs.get("neighbor_dist", get_default_shared_params(select_param="neighbor_distance"))
 
     total_spinices = np.prod(tessellate_shape) if tessellate_shape else 1
-    
+
+    if squint_grid_size and total_spinices > 1:
+        for indv in pop:
+            coords = indv.coords
+            indv.grids = [Grid.fixed_grid(indv.coords[::indv.pheno_size], squint_grid_size) for cell in range(total_spinices)]
+
     if t == -1:
         filter = lambda df: df["t"] == df["t"].max()
     else:
@@ -1453,8 +1521,6 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
         return run_params
 
     def fit_func(ds):
-        states = None
-
         spin = better_read_tables(ds.tablefile("spin"), filter)
 
         state_num = []
@@ -1467,17 +1533,21 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
 
         if len(state_num) == 1:
             fitn = state_num[0]
-        else:  # if using disorder find mode and see if 70% share else give nan
+        else:
             mode_res = mode(state_num)
-            if mode_res.count[0]/len(state_num) > 0.7:
-                fitn = mode_res.mode[0]
-            else:
-                fitn = np.nan
-
+            fitn = mode_res.mode[0], mode_res.count[0] / len(state_num)
+            if polar_coords:
+                fitn = pol2cart(fitn[1]*100, np.pi * (1 - fitn[0]/len(input)))
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
     return pop
+
+
+def pol2cart(r, theta):
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return [x, y]
 
 
 def better_read_tables(filenames, filter=None, index_col=None):
@@ -1748,6 +1818,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         "xor": xor_fitness,
         "ca_rule": ca_rule_fitness,
         "state_num2": state_num_fitness2,
+        "novelty": evaluate_outer_novelty_search,
     }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
