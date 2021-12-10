@@ -558,8 +558,29 @@ class Individual:
         if return_labels:
             labels = [(x, y) for x in range(len(magnets)) for y in range(np.prod(shape))]
             return result, labels
-
+ 
         return result
+
+    @staticmethod
+    def fast_tessellate(magnets, shape=(5, 1), padding=0, centre=True, return_labels=False):
+        pos = np.array([mag.pos for mag in magnets])
+        angles = np.array([mag.angle for mag in magnets])
+        cell_size = pos.ptp(axis=0) + padding
+
+        res = np.tile(pos, (np.prod(shape), 1))
+        offsets = np.indices(shape).T.reshape(-1, 2) * cell_size
+        res += offsets.repeat(len(magnets), axis=0)
+
+        if centre:
+            res -= (0.5*cell_size[0]*(shape[0]), 0.5*cell_size[1]*(shape[1]))
+
+        angles = np.tile(angles, np.prod(shape))
+
+        if return_labels:
+            labels = np.indices((np.prod(shape), len(magnets))).reshape(2, -1).T
+            return res, angles, labels
+        else:
+            return res, angles
 
     def plot(self, facecolor=None, edgecolor=None):
         for mag in self.pheno:
@@ -1509,14 +1530,13 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
     def preprocessing(run_params):
         if tessellate_shape is not None:
             # do tessellating
-            total_spinices = np.prod(tessellate_shape)
             for run in run_params:
                 indv = id2indv[run["indv_id"]]
-                tess = Individual.tessellate(indv.pheno, tessellate_shape, padding=2*nndist)
-                run["magnet_angles"] = np.array([mag.angle for mag in tess])
-                run["magnet_coords"] = np.array([mag.pos for mag in tess])
-                run["labels"] = [(num_ASIs, num_spins) for num_ASIs in range(total_spinices)
-                                    for num_spins in range(len(indv.pheno))]
+                pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2*nndist,
+                    centre=False, return_labels=True)
+                run["magnet_angles"] = angles
+                run["magnet_coords"] = pos
+                run["labels"] = labels
 
         return run_params
 
