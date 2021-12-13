@@ -875,7 +875,7 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
     from scipy.spatial import cKDTree
     novelty_file = os.path.join(basepath, "noveltyTree.pkl")
     pop_fitness_components = [indv.fitness_components for indv in outer_pop]
-
+    new_pop_fitness_components = [indv.fitness_components for indv in outer_pop if indv.created >= gen]
     # if no novelty tree exists, create one and give individuals fitness = 0
     if not os.path.exists(novelty_file):
         kdTree = cKDTree(pop_fitness_components)
@@ -888,7 +888,8 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
         kdFitness = kdTree.query(pop_fitness_components, k=kNeigbours)[0].mean(axis=1)
         for indv, fit in zip(outer_pop, kdFitness):
             indv.fitness = fit
-        kdTree = cKDTree(np.vstack((kdTree.data, pop_fitness_components)))
+        # add new individuals to the tree (don't re-add old individuals)
+        kdTree = cKDTree(np.vstack((kdTree.data, new_pop_fitness_components)))
 
     with open(novelty_file, "wb") as f:
         pkl.dump(kdTree, f)
@@ -896,7 +897,7 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
     if plot:
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
         ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "bo")
-        fit_comp_array = np.array(pop_fitness_components)
+        fit_comp_array = np.array(new_pop_fitness_components)
         ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "ro")
         if plot_bounds is not None:
             ax.set_xlim(plot_bounds[0])
