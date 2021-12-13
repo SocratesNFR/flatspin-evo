@@ -1196,7 +1196,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
             )
         sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
-        filenames.append(outdir)
+        filenames.append(outdir);
         row = OrderedDict(run_params)
         row.update({"outdir": outdir})
         index.append(row)
@@ -1498,9 +1498,11 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
     return pop
 
 
-def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None, squint_grid_size=None, polar_coords=True,**flatspin_kwargs):
+def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None,
+                        squint_grid_size=None, polar_coords=True, fit_acc="mode", **flatspin_kwargs):
     from scipy.stats import mode
-    input = str([list(f"{i:b}".zfill(bit_len)) for i in range(2**bit_len)])
+    max_state_count = 2**bit_len
+    input = str([list(f"{i:b}".zfill(bit_len)) for i in range(max_state_count)])
 
     if not sweep_params:
         sweep_params = {}
@@ -1554,10 +1556,15 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
         if len(state_num) == 1:
             fitn = state_num[0]
         else:
-            mode_res = mode(state_num)
-            fitn = mode_res.mode[0], mode_res.count[0] / len(state_num)
+            if fit_acc == "mode":
+                mode_res = mode(state_num)
+                fitn = mode_res.mode[0], 100 * mode_res.count[0] / len(state_num)
+            elif fit_acc == "mean":
+                fitn = np.mean(state_num), 100 / (np.std(state_num) + 1)
+            else:
+                raise ValueError("Unknown fit_acc")
             if polar_coords:
-                fitn = pol2cart(fitn[1]*100, np.pi * (1 - fitn[0]/len(input)))
+                fitn = pol2cart(fitn[1], np.pi * (1 - fitn[0]/max_state_count))
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
