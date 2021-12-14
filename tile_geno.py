@@ -875,7 +875,7 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
     from scipy.spatial import cKDTree
     novelty_file = os.path.join(basepath, "noveltyTree.pkl")
     pop_fitness_components = [indv.fitness_components for indv in outer_pop]
-    new_pop_fitness_components = [indv.fitness_components for indv in outer_pop if indv.created >= gen]
+    new_pop_fitness_components = [indv.fitness_components for indv in outer_pop if indv.gen >= gen]
     # if no novelty tree exists, create one and give individuals fitness = 0
     if not os.path.exists(novelty_file):
         kdTree = cKDTree(pop_fitness_components)
