@@ -896,9 +896,9 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
 
     if plot:
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-        ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "bo")
+        ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "o", color=[1, 0, 0, .1])
         fit_comp_array = np.array(new_pop_fitness_components)
-        ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "ro")
+        ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "o", color=[0, 0, 1, .7])
         if plot_bounds is not None:
             ax.set_xlim(plot_bounds[0])
             ax.set_ylim(plot_bounds[1])
