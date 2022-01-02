@@ -154,7 +154,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
     for indv in pop:
         ind = dataset.index
-        if indv.id in ind["indv_id"].values:
+        if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
             copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
