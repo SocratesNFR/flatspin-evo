@@ -153,21 +153,29 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         best = fn(pop, key=lambda indv: indv.fitness)
 
     for indv in pop:
-        ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
-        ds = ds.filter(indv_id=indv.id)
-        ind = ds.index
-        ind.insert(0, 'gen', gen)  # current generation
-        ind.insert(2, 'fitness', indv.fitness)
-        ind.insert(3, 'best', int(indv == best))
+        ind = dataset.index
+        if indv.id in ind["indv_id"].values:
+            copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
+            copy_row["gen"] = gen
+            copy_row["fitness"] = indv.fitness
+            copy_row["best"] = int(indv == best)
+            ind = ind.append(copy_row, ignore_index=True)
+        else:
+            ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
+            ds = ds.filter(indv_id=indv.id)
+            ind = ds.index
+            ind.insert(0, 'gen', gen)  # current generation
+            ind.insert(2, 'fitness', indv.fitness)
+            ind.insert(3, 'best', int(indv == best))
 
-        # patch outdir
-        ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
-        to_drop = [col for col in ['magnet_coords', 'magnet_angles'] if col in ind]
-        ind.drop(columns=to_drop, inplace=True)  # debug
-        # fitness_componenets should be added last due to variable column number
-        for i, comp in enumerate(indv.fitness_components):
-            ind.insert(len(ind.columns), f"fitness_component{i}", comp)
-        dataset.index = dataset.index.append(ind)
+            # patch outdir
+            ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
+            to_drop = [col for col in ['magnet_coords', 'magnet_angles'] if col in ind]
+            ind.drop(columns=to_drop, inplace=True)  # debug
+            # fitness_componenets should be added last due to variable column number
+            for i, comp in enumerate(indv.fitness_components):
+                ind.insert(len(ind.columns), f"fitness_component{i}", comp)
+            dataset.index = dataset.index.append(ind)
 
         if not dataset.params:
             dataset.params = ds.params
@@ -219,7 +227,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None,
-         starting_pop=None, **kwargs):
+         starting_pop=None, continue_run=False, **kwargs):
     check_args = np.unique(list(evolved_params) + list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
     if check_args:
@@ -232,9 +240,6 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     individual_class.set_evolved_params(evolved_params)
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
-
-    # sweep_list moved to flatspin_eval
-    # sweep_list = list(sweep(sweep_params, repeat, repeat_spec, params=kwargs)) if sweep_params else []
 
     # hacks to allow fixed geoms
     if "model" in kwargs and kwargs["model"] != "CustomSpinIce":
