@@ -593,6 +593,19 @@ class Individual:
         plt.gca().set_aspect(1)
         plt.autoscale()
 
+    @staticmethod
+    def dataset_to_individuals(dataset, mag_w=220, mag_h=80, created=None, padding=20, **kwargs):
+        individuals = []
+        for row in dataset:
+            indv = Individual(init_pheno=False, **kwargs, id=row.index["indv_id"].values[0])
+            geom = read_table(row.tablefile("geom"))
+            coords = np.vstack([geom["posx"], geom["posy"]]).T
+            angles = geom["angle"].values
+            indv.pheno = [Magnet(0, pos, angle, mag_w, mag_h, created, padding) for pos, angle in zip(coords, angles)]
+            individuals.append(indv)
+
+        return individuals
+
 
 class Tile(Sequence):
     def __init__(

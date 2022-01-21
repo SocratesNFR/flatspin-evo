@@ -155,11 +155,11 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     for indv in pop:
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
-            copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
+            copy_rows = ind[ind["indv_id"] == indv.id].iloc[0].copy()
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
             copy_row["best"] = int(indv == best)
-            ind = ind.append(copy_row, ignore_index=True)
+            dataset.index = ind.append(copy_row, ignore_index=True)
         else:
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
@@ -170,7 +170,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
 
             # patch outdir
             ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
-            to_drop = [col for col in ['magnet_coords', 'magnet_angles'] if col in ind]
+            to_drop = [col for col in ['magnet_coords', 'magnet_angles', 'labels'] if col in ind]
             ind.drop(columns=to_drop, inplace=True)  # debug
             # fitness_componenets should be added last due to variable column number
             for i, comp in enumerate(indv.fitness_components):
@@ -187,7 +187,7 @@ def save_snapshot(outdir, pop):
 
 
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
-        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, **kwargs):
+        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, keep_id=False **kwargs):
 
     check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
@@ -208,7 +208,10 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
             starting_pop = f.read().splitlines()
     except Exception:
         pass
-    pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
+    pop = [individual_class.from_string(i, gen=0) for i in starting_pop]
+    if not keep_id:
+        for indv in pop:
+            indv.id = None
 
     evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
