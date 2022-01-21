@@ -187,7 +187,7 @@ def save_snapshot(outdir, pop):
 
 
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
-        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, keep_id=False **kwargs):
+        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, keep_id=False, **kwargs):
 
     check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
