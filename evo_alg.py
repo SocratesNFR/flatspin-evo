@@ -187,7 +187,8 @@ def save_snapshot(outdir, pop):
 
 
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
-        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None, keep_id=False, **kwargs):
+        *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None,
+        starting_pheno=None, keep_id=False, **kwargs):
 
     check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
@@ -203,15 +204,26 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
                 set -i fixed_geom=True if you do not want to evolve the geometry""")
 
     assert starting_pop, "starting population is required"
-    try:
+    try: # try to read starting pop as a file, else assume it's a list of strings
         with open(starting_pop, "r") as f:
             starting_pop = f.read().splitlines()
     except Exception:
         pass
+    if starting_pheno:
+        try:
+            with open(starting_pheno, "r") as f:
+                starting_pheno = f.read().splitlines()
+        except Exception:
+            pass
+        starting_phenos = [individual_class.pheno_from_string(pheno) for pheno in starting_pheno]
     pop = [individual_class.from_string(i, gen=0) for i in starting_pop]
     if not keep_id:
-        for indv in pop:
-            indv.id = None
+        for i, indv in enumerate(pop):
+            indv.id = i
+    if starting_pheno:
+        for indv, pheno in zip(pop, starting_phenos):
+            indv.pheno = pheno
+
 
     evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)

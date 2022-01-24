@@ -145,7 +145,7 @@ class Individual:
         return new_indv
 
     @staticmethod
-    def from_string(s, **overides):
+    def from_string(s,keep_pheno=False, **overides):
         array = np.array
         inf = np.inf
         params = eval(s)
@@ -605,6 +605,12 @@ class Individual:
             individuals.append(indv)
 
         return individuals
+
+    @staticmethod
+    def pheno_from_string(s):
+        array = np.array
+        magnets = eval(s)
+        return [Magnet(**mag) for mag in magnets]
 
 
 class Tile(Sequence):
