@@ -216,7 +216,7 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
         except Exception:
             pass
         starting_phenos = [individual_class.pheno_from_string(pheno) for pheno in starting_pheno]
-    pop = [individual_class.from_string(i, gen=0) for i in starting_pop]
+    pop = [individual_class.from_string(i, gen=0, init_pheno=starting_pheno is None) for i in starting_pop]
     if not keep_id:
         for i, indv in enumerate(pop):
             indv.id = i

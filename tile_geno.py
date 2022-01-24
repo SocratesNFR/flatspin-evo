@@ -8,6 +8,7 @@ from shapely.geometry import box, MultiPolygon
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
 from itertools import count
+from functools import cached_property
 from copy import deepcopy, copy
 from collections import Sequence, OrderedDict
 from time import sleep
@@ -743,8 +744,19 @@ class Magnet:
         self.created = created
         # padding 20nm results in min possible distance between 2 magnets as 20nm (pads each side by 20/2)
         self.padding = padding
-        self.as_polygon, self.bound = self.init_polygon()
         self.locked = False
+
+    @cached_property
+    def __bound_and_polygon(self):
+        return self.init_polygon()
+
+    @property
+    def bound(self):
+        return self.__bound_and_polygon[0]
+
+    @property
+    def as_polygon(self):   
+        return self.__bound_and_polygon[1]
 
     def __eq__(self, other):
         if type(other) != Magnet:
@@ -861,7 +873,7 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     for mag in magnets:
         mag.pos += shift
         # need to remake the polys with new pos
-        mag.as_polygon, mag.bound = mag.init_polygon()
+        del mag.bound_and_polygon
     return magnets
 
 
