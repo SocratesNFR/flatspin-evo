@@ -14,7 +14,7 @@ import sys
 from warnings import warn
 
 from flatspin.runner import run, run_dist, run_local
-from flatspin.data import Dataset, is_archive_format
+from flatspin.data import Dataset, is_archive_format, read_csv
 from flatspin.utils import get_default_params, import_class
 from flatspin.sweep import sweep
 
@@ -204,7 +204,7 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
                 set -i fixed_geom=True if you do not want to evolve the geometry""")
 
     assert starting_pop, "starting population is required"
-    try: # try to read starting pop as a file, else assume it's a list of strings
+    try:  # try to read starting pop as a file, else assume it's a list of strings
         with open(starting_pop, "r") as f:
             starting_pop = f.read().splitlines()
     except Exception:
@@ -224,10 +224,8 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
         for indv, pheno in zip(pop, starting_phenos):
             indv.pheno = pheno
 
-
     evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
-
 
     index = pd.DataFrame()
     params = None  # to be added by update_superdataset
@@ -238,23 +236,45 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
     dataset.save()
 
 
-def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
-         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
-         mut_strength=1, reval_inner=False, elitism=False, individual_params={},
-         outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, **kwargs):
+def parse_starting_pop(starting_pop, individual_class):
+    try:
+        with open(starting_pop, "r") as f:
+            starting_pop = f.read().splitlines()
+    except Exception:
+        pass
+    pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
+    return pop
+
+
+def setup_continue_run(outdir, individual_class, start_gen):
+    with open(os.path.join(outdir, "snapshot.pkl"), "rb") as f:
+        pop = list(map(lambda i: individual_class.from_string(i), pkl.load(f)))
+
+    dataset = Dataset.read(outdir)
+
+    assert os.path.isdir(os.path.join(outdir, f"gen{start_gen-1}")), f"gen{start_gen-1} does not exist"
+
+    if os.path.isdir(os.path.join(outdir, f"gen{start_gen}")):
+        # rename last gen so not overwritten
+        gen_string = f"gen{start_gen}"
+        os.rename(os.path.join(outdir, gen_string), os.path.join(outdir, "old_" + gen_string))
+        gen_string = "old_" + gen_string
+    else:
+        gen_string = f"gen{start_gen-1}"
+
+    # find the largest id in the dataset so we dont overwrite
+    newest_index = read_csv(os.path.join(outdir, gen_string, "index.csv"))
+    max_id = max(newest_index["indv_id"].values)
+    individual_class.set_id_start(max_id + 1)
+
+    return pop, dataset
+
+
+def main_check_args(individual_params, evolved_params, sweep_params, kwargs):
     check_args = np.unique(list(evolved_params) + list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
     if check_args:
         raise RuntimeError(f"param '{check_args[0]}' appears in multiple param groups")
-    print("Initialising")
-    for evo_p in evolved_params:
-        evolved_params[evo_p] = {"low": evolved_params[evo_p][0],
-                                 "high": evolved_params[evo_p][1],
-                                 "shape": (evolved_params[evo_p][2:] if len(evolved_params[evo_p]) > 2 else None)}
-    individual_class.set_evolved_params(evolved_params)
-    if not os.path.isdir(outdir):
-        os.makedirs(outdir)
 
     # hacks to allow fixed geoms
     if "model" in kwargs and kwargs["model"] != "CustomSpinIce":
@@ -262,28 +282,52 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
     elif ("magnet_angles" in kwargs or " magnet_coords" in kwargs) and not individual_params.get("fixed_geom", False):
         warn("""You suppplied magnet_angles or magnet_coords, but 'fixed_geom' is False,
                 set -i fixed_geom=True if you do not want to evolve the geometry""")
-    if starting_pop:
-        try:
-            with open(starting_pop, "r") as f:
-                starting_pop = f.read().splitlines()
-        except Exception:
-            pass
-        pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
+
+
+def setup_evolved_params(evolved_params, individual_class):
+    for evo_param in evolved_params:
+        evolved_params[evo_param] = {"low": evolved_params[evo_param][0],
+                                    "high": evolved_params[evo_param][1],
+                                    "shape": (evolved_params[evo_param][2:] if len(evolved_params[evo_param]) > 2 else None)}
+    individual_class.set_evolved_params(evolved_params)
+
+
+def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
+         pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
+         mut_strength=1, reval_inner=False, elitism=False, individual_params={},
+         outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None,
+         starting_pop=None, continue_run=False, starting_gen=1, **kwargs):
+
+    print("Initialising")
+    main_check_args(individual_params, evolved_params, sweep_params, kwargs)
+
+    assert os.path.isdir(outdir) or not continue_run, "can't continue run without existing outdir"
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
+    setup_evolved_params(evolved_params, individual_class)
+
+    if continue_run:
+        pop, dataset = setup_continue_run(outdir, individual_class, starting_gen)
+
     else:
-        pop = [individual_class(**individual_params) for _ in range(pop_size)]
-    evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
-    evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
+        if starting_pop:
+            pop = parse_starting_pop(starting_pop, individual_class)
+        else:
+            pop = [individual_class(**individual_params) for _ in range(pop_size)]
+        evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+        evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
+        # create superdataset
+        index = pd.DataFrame()
+        params = None  # to be added by update_superdataset
+        info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
+        dataset = Dataset(index, params, info, basepath=outdir)
+
+        update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
+        dataset.save()
+
     gen_times = []
-
-    index = pd.DataFrame()
-    params = None  # to be added by update_superdataset
-    info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
-    dataset = Dataset(index, params, info, basepath=outdir)
-
-    update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
-    dataset.save()
-
-    for gen in range(1, generation_num + 1):
+    for gen in range(starting_gen, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
         if len(gen_times) > 0:
             tr = np.mean(gen_times[-max(10, len(gen_times) // 10):]) * (generation_num - gen)

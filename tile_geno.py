@@ -146,7 +146,7 @@ class Individual:
         return new_indv
 
     @staticmethod
-    def from_string(s,keep_pheno=False, **overides):
+    def from_string(s, keep_pheno=False, **overides):
         array = np.array
         inf = np.inf
         params = eval(s)
@@ -231,7 +231,6 @@ class Individual:
                 ax.add_artist(ax.patch)
                 ax.patch.set_zorder(-1)
                 fig.subplots_adjust(left=None, bottom=None, right=None, wspace=None, hspace=None)
-
 
             fig.canvas.draw()
 
@@ -573,7 +572,7 @@ class Individual:
         res += offsets.repeat(len(magnets), axis=0)
 
         if centre:
-            res -= (0.5*cell_size[0]*(shape[0]), 0.5*cell_size[1]*(shape[1]))
+            res -= (0.5 * cell_size[0] * (shape[0]), 0.5 * cell_size[1] * (shape[1]))
 
         angles = np.tile(angles, np.prod(shape))
 
@@ -612,6 +611,10 @@ class Individual:
         array = np.array
         magnets = eval(s)
         return [Magnet(**mag) for mag in magnets]
+
+    @staticmethod
+    def set_id_start(start):
+        Individual._id_counter = count(start)
 
 
 class Tile(Sequence):
@@ -977,7 +980,6 @@ def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, *
     print(found_id)
 
 
-
 def dist2missing(x, found, missing=-1):
     """given index x, find smallest distance to a missing value in found"""
     if found[x] == missing:
@@ -1228,7 +1230,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
             )
         sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
-        filenames.append(outdir);
+        filenames.append(outdir)
         row = OrderedDict(run_params)
         row.update({"outdir": outdir})
         index.append(row)
@@ -1349,7 +1351,7 @@ def majority_fitness(pop, gen, outdir, sweep_params, test_at=None, match=True, *
 
 def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, threshold=True, **flatspin_kwargs):
     img = np.asarray(Image.open(image_file_loc))
-    l = []
+    lst = []
     step = len(img) / num_blocks
     for y in range(num_blocks):
         row = []
@@ -1358,9 +1360,9 @@ def image_match_fitness(pop, gen, outdir, image_file_loc, num_blocks=33, thresho
                 int(x * step): int((x + 1) * step), int(y * step): int((y + 1) * step)
             ]
             row.append(np.mean(a))
-        l.append(row)
+        lst.append(row)
 
-    target = np.array(l)
+    target = np.array(lst)
     target = np.flipud(target).flatten()
     if threshold:
         target = (target > (255 / 2)) * 255
@@ -1531,7 +1533,7 @@ def state_num_fitness(pop, gen, outdir, state_step=None, **flatspin_kwargs):
 
 
 def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None,
-                        squint_grid_size=None, polar_coords=True, fit_acc="mode", **flatspin_kwargs):
+                    squint_grid_size=None, polar_coords=True, fit_acc="mode", **flatspin_kwargs):
     from scipy.stats import mode
     max_state_count = 2**bit_len
     input = str([list(f"{i:b}".zfill(bit_len)) for i in range(max_state_count)])
@@ -1566,7 +1568,7 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
             # do tessellating
             for run in run_params:
                 indv = id2indv[run["indv_id"]]
-                pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2*nndist,
+                pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2 * nndist,
                     centre=False, return_labels=True)
                 run["magnet_angles"] = angles
                 run["magnet_coords"] = pos
@@ -1596,7 +1598,7 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
             else:
                 raise ValueError("Unknown fit_acc")
             if polar_coords:
-                fitn = pol2cart(fitn[1], np.pi * (1 - fitn[0]/max_state_count))
+                fitn = pol2cart(fitn[1], np.pi * (1 - fitn[0] / max_state_count))
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
@@ -1618,6 +1620,7 @@ def better_read_tables(filenames, filter=None, index_col=None):
     for df in dfs[1:]:
         table = table.append(df)
     return table
+
 
 def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     id2indv = {individual.id: individual for individual in pop}
@@ -1756,8 +1759,8 @@ def stray_field_ca_fitness(pop, gen, outdir, sweep_params, grid_size=(5, 1), tar
 def check_ca_rules(rule_table):
     num_cells = len(rule_table.keys()[0])
     rules = []
-    for i in range(1, num_cells-1):
-        inputs = [k[i-1:i+1] for k in rule_table]
+    for i in range(1, num_cells - 1):
+        inputs = [k[i - 1:i + 1] for k in rule_table]
         outputs = [rule_table[k][i] for k in rule_table]
         rules.append(check_ca_rule(inputs, outputs))
     return rules
