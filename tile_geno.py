@@ -873,7 +873,7 @@ class Magnet:
         return v
 
     def copy(self, *, created=None):
-        ignore = ["as_polygon", "locked", "bound"]
+        ignore = ["as_polygon", "locked", "bound", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
         v = {k: v for (k, v) in vars(self).items() if k not in ignore}
         if created is not None:
             v.update({"created": created})
