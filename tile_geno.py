@@ -894,7 +894,7 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     for mag in magnets:
         mag.pos += shift
         # need to remake the polys with new pos
-        mag.clear_cached_polgon()
+        mag.clear_cached_polygon()
     return magnets
 
 
