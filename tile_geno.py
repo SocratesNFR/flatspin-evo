@@ -800,7 +800,7 @@ class Magnet:
             {
                 k: v
                 for (k, v) in vars(self).items()
-                if k not in ["as_polygon", "locked", "bound"]
+                if k not in ["as_polygon", "locked", "bound", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
             }
         )
 
