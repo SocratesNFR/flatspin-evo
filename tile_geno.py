@@ -1968,7 +1968,8 @@ if __name__ == "__main__":
 
     outpath = os.path.join(os.path.curdir, args.output)
     logpath = os.path.join(outpath, args.log)
-    os.makedirs(outpath)
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
     logging.basicConfig(filename=logpath, level=logging.INFO)
     main(
         outdir=args.output,
