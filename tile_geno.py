@@ -749,17 +749,35 @@ class Magnet:
         self.padding = padding
         self.locked = False
 
-    @cached_property
-    def __bound_and_polygon(self):
-        return self.init_polygon()
+        self.__cached_bound = None
+        self.__cached_as_polygon = None
+
+    def recalculate_polygon_and_bound(self):
+        self.__cached_as_polygon, self.__cached_bound = self.init_polygon()
+
+    def clear_cached_polygon(self):
+        self.__cached_as_polygon = None
+        self.__cached_bound = None
 
     @property
     def bound(self):
-        return self.__bound_and_polygon[0]
+        if not self.__cached_bound:
+            self.recalculate_polygon_and_bound()
+        return self.__cached_bound
+
+    @bound.setter
+    def bound(self, value):
+        self.__cached_bound = value
 
     @property
-    def as_polygon(self):   
-        return self.__bound_and_polygon[1]
+    def as_polygon(self):
+        if not self.__cached_as_polygon:
+            self.recalculate_polygon_and_bound()
+        return self.__cached_as_polygon
+
+    @as_polygon.setter
+    def as_polygon(self, value):
+        self.__cached_as_polygon = value
 
     def __eq__(self, other):
         if type(other) != Magnet:
@@ -806,7 +824,7 @@ class Magnet:
         if type(others) is not list:
             others = [others]
         prepped_poly = prep(self.bound)
-        
+
         for o in others:
             if prepped_poly.intersects(o.bound):
                 return True
@@ -876,7 +894,7 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     for mag in magnets:
         mag.pos += shift
         # need to remake the polys with new pos
-        del mag.bound_and_polygon
+        mag.clear_cached_polgon()
     return magnets
 
 
