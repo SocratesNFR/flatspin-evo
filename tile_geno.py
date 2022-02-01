@@ -795,12 +795,14 @@ class Magnet:
     def __ne__(self, other):
         return not self == other
 
+    IGNORED_VARS = ["as_polygon", "locked", "bound", "_Magnet__bound_and_polygon", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
+
     def __repr__(self):
         return repr(
             {
                 k: v
                 for (k, v) in vars(self).items()
-                if k not in ["as_polygon", "locked", "bound", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
+                if k not in Magnet.IGNORED_VARS
             }
         )
 
@@ -873,8 +875,7 @@ class Magnet:
         return v
 
     def copy(self, *, created=None):
-        ignore = ["as_polygon", "locked", "bound", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
-        v = {k: v for (k, v) in vars(self).items() if k not in ignore}
+        v = {k: v for (k, v) in vars(self).items() if k not in Magnet.IGNORED_VARS}
         if created is not None:
             v.update({"created": created})
         v["pos"] = v["pos"].copy()  # derefernce
