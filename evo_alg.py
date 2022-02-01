@@ -155,6 +155,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     for indv in pop:
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
+            assert ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].empty
             copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
@@ -292,6 +293,12 @@ def setup_evolved_params(evolved_params, individual_class):
     individual_class.set_evolved_params(evolved_params)
 
 
+def check_pop_id_uniqueness(pop):
+    ids = [i.id for i in pop]
+    if len(np.unique(ids)) != len(ids):
+        raise RuntimeError("population contains duplicate ids")
+
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
@@ -324,6 +331,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         dataset = Dataset(index, params, info, basepath=outdir)
 
         update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
+        check_pop_id_uniqueness(pop)
         dataset.save()
 
     gen_times = []
@@ -340,13 +348,14 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         for indv in pop:
             if np.random.rand() < mut_prob:
                 new_kids += indv.mutate(mut_strength)
+        check_pop_id_uniqueness(new_kids)
         # Crossover!
         print("    Crossover")
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
             if np.random.rand() < cx_prob:
                 partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
                 new_kids += indv.crossover(partner)
-
+        check_pop_id_uniqueness(new_kids)
         for indv in new_kids:
             indv.gen = gen
 
@@ -359,17 +368,18 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         else:
             evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
             pop.extend(new_kids)
+        check_pop_id_uniqueness(pop)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
-
+        check_pop_id_uniqueness(pop)
         # Select
         print("    Select")
         pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
         assert len(pop) <= pop_size
-
+        check_pop_id_uniqueness(pop)
         update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
         dataset.save()
-
+        check_pop_id_uniqueness(pop)
         best = save_stats(outdir, pop, minimize_fitness)
         save_snapshot(outdir, pop)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
