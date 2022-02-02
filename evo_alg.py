@@ -152,22 +152,33 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
         fn = min if minimize_fitness else max
         best = fn(pop, key=lambda indv: indv.fitness)
 
+    log_lines = []
+    log_lines.append(f"gen = {gen}")
+    log_lines.append(f"pop_ids = {[indv.id for indv in pop]}")
+
     for indv in pop:
+        log_lines.append(f"\n===============checking {indv.id}================")
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
+            log_lines.append(f"{indv.id} already in dataset")
             if not ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].empty:
                 print([i.id for i in pop])
                 print(f"failed on {indv.id}{gen}")
                 print("===========================")
                 print(ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].to_string())
-                ind.to_csv(os.path.join(outdir, "degbugIndex.csv"))
+                ind.to_csv(os.path.join(outdir, "debugIndex.csv"))
+                with open(os.path.join(outdir, "debuglog.txt"), "a") as f:
+                    f.write("\n".join(log_lines))
                 raise Exception("duplicate indv")
             copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
+            log_lines.append(f"copying row {copy_row.to_dict()}")
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
             copy_row["best"] = int(indv == best)
+            log_lines.append(f"appending edited copy row {copy_row.to_dict()}")
             dataset.index = ind.append(copy_row, ignore_index=True)
         else:
+            log_lines.append(f"{indv.id} not in dataset")
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
             ind = ds.index
@@ -182,10 +193,14 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
             # fitness_componenets should be added last due to variable column number
             for i, comp in enumerate(indv.fitness_components):
                 ind.insert(len(ind.columns), f"fitness_component{i}", comp)
+            log_lines.append(f"appending new row {ind.to_dict()}")
             dataset.index = dataset.index.append(ind)
+        with open(os.path.join(outdir, "debuglog.txt"), "w") as f:
+            f.write("\n".join(log_lines))
 
         if not dataset.params:
             dataset.params = ds.params
+        
 
 
 def save_snapshot(outdir, pop):
