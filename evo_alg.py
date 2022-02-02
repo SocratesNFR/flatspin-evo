@@ -155,7 +155,13 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     for indv in pop:
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
-            assert ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].empty
+            if not ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].empty:
+                print([i.id for i in pop])
+                print(f"failed on {indv.id}{gen}")
+                print("===========================")
+                print(ind[(ind["indv_id"] == indv.id) & (ind["gen"] == gen)].to_string())
+                ind.to_csv(os.path.join(outdir, "degbugIndex.csv"))
+                raise Exception("duplicate indv")
             copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
