@@ -25,6 +25,8 @@ import pandas as pd
 import shlex
 import sys
 
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import patches
 from matplotlib.animation import FuncAnimation, writers
