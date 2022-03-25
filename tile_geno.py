@@ -15,7 +15,7 @@ from time import sleep
 import evo_alg as ea
 from PIL import Image
 
-from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column
+from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.grid import Grid
 from flatspin.utils import get_default_params, import_class
 from flatspin.runner import run, run_dist, run_local
@@ -538,7 +538,7 @@ class Individual:
     @staticmethod
     def tessellate(magnets, shape=(5, 1), padding=0, centre=True, return_labels=False):
         magnets = [mag.copy() for mag in magnets]
-        polygons = MultiPolygon([mag.as_polygon for mag in magnets])
+        polygons = MultiPolygon([mag.get_polygon() for mag in magnets])
         minx, miny, maxx, maxy = polygons.bounds
         cell_size = np.array([maxx - minx, maxy - miny]) + padding
         first_row = [mag.copy() for mag in magnets]
@@ -751,35 +751,25 @@ class Magnet:
         self.padding = padding
         self.locked = False
 
-        self.__cached_bound = None
-        self.__cached_as_polygon = None
-
+        self._as_polygon = None
+        self._bound = None
+                
     def recalculate_polygon_and_bound(self):
-        self.__cached_as_polygon, self.__cached_bound = self.init_polygon()
+        self.init_polygon()
 
     def clear_cached_polygon(self):
-        self.__cached_as_polygon = None
-        self.__cached_bound = None
+        self._as_polygon = None
+        self._bound = None
 
-    @property
-    def bound(self):
-        if not self.__cached_bound:
+    def get_bound(self):
+        if self._bound is None:
             self.recalculate_polygon_and_bound()
-        return self.__cached_bound
+        return self._bound
 
-    @bound.setter
-    def bound(self, value):
-        self.__cached_bound = value
-
-    @property
-    def as_polygon(self):
-        if not self.__cached_as_polygon:
+    def get_polygon(self):
+        if self._as_polygon is None:
             self.recalculate_polygon_and_bound()
-        return self.__cached_as_polygon
-
-    @as_polygon.setter
-    def as_polygon(self, value):
-        self.__cached_as_polygon = value
+        return self._as_polygon
 
     def __eq__(self, other):
         if type(other) != Magnet:
@@ -797,7 +787,7 @@ class Magnet:
     def __ne__(self, other):
         return not self == other
 
-    IGNORED_VARS = ["as_polygon", "locked", "bound", "_Magnet__bound_and_polygon", "_Magnet__cached_as_polygon", "_Magnet__cached_bound"]
+    IGNORED_VARS = ["as_polygon", "locked", "bound", "_as_polygon", "_bound"]
 
     def __repr__(self):
         return repr(
@@ -819,18 +809,18 @@ class Magnet:
         bounds = box(
             min_x - half_pad, min_y - half_pad, max_x + half_pad, max_y + half_pad
         )
-        return rotate(rect, self.angle, use_radians=True), rotate(
-            bounds, self.angle, use_radians=True
-        )
+        my_angle = self.angle
+        self._as_polygon = rotate(rect, my_angle, "centroid", use_radians=True)
+        self._bound = rotate(bounds, my_angle, "centroid", use_radians=True)
 
     def is_intersecting(self, others):
         # others may be a magnet or list of magnets
         if type(others) is not list:
             others = [others]
-        prepped_poly = prep(self.bound)
+        prepped_poly = prep(self.get_bound())
 
         for o in others:
-            if prepped_poly.intersects(o.bound):
+            if prepped_poly.intersects(o.get_bound()):
                 return True
         return False
 
@@ -842,7 +832,7 @@ class Magnet:
         return False
 
     def as_patch(self):
-        patch = patches.Polygon(np.array(self.as_polygon.exterior.coords))
+        patch = patches.Polygon(np.array(self.get_polygon.exterior.coords))
         patch.iterCreated = self.created
         return patch
 
@@ -850,16 +840,16 @@ class Magnet:
         # inplace, rotate anticlockwise
         assert not self.locked
         self.angle = (self.angle + angle) % (2 * np.pi)
-        self.as_polygon = rotate(self.as_polygon, angle, origin, use_radians=True)
-        self.bound = rotate(self.bound, angle, origin, use_radians=True)
-        self.pos = np.array(self.as_polygon.centroid.coords).reshape(2)
+        self._as_polygon = rotate(self.get_polygon(), angle, origin, use_radians=True)
+        self._bound = rotate(self.get_bound(), angle, origin, use_radians=True)
+        self.pos = np.array(self.get_polygon().centroid.coords).reshape(2)
 
     def i_translate(self, x, y):
         assert not self.locked
         # inplace
         self.pos += np.array((x, y))
-        self.as_polygon = translate(self.as_polygon, x, y)
-        self.bound = translate(self.bound, x, y)
+        self._as_polygon = translate(self.get_polygon(), x, y)
+        self._bound = translate(self.get_bound(), x, y)
 
     def i_set_pos(self, x, y):
         self.i_translate(x - self.pos[0], y - self.pos[1])
@@ -895,9 +885,11 @@ def centre_magnets(magnets, centre_point=(0, 0)):
     y_shift = centre_point[1] - (max_y + min_y) * 0.5
     shift = np.array((x_shift, y_shift))
     for mag in magnets:
-        mag.pos += shift
-        # need to remake the polys with new pos
-        mag.clear_cached_polygon()
+        mag.locked = False
+        mag.i_translate(x_shift, y_shift)
+        mag.locked = True
+        #mag.pos += shift
+
     return magnets
 
 
@@ -944,12 +936,13 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
         for indv, fit in zip(outer_pop, kdFitness):
             indv.fitness = fit
         # add new individuals to the tree (don't re-add old individuals)
-        kdTree = cKDTree(np.vstack((kdTree.data, new_pop_fitness_components)))
+        if len(new_pop_fitness_components) > 0:
+            kdTree = cKDTree(np.vstack((kdTree.data, new_pop_fitness_components)))
 
     with open(novelty_file, "wb") as f:
         pkl.dump(kdTree, f)
 
-    if plot:
+    if plot and len(new_pop_fitness_components) > 0:
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
         ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "o", color=[1, 0, 0, .1])
         fit_comp_array = np.array(new_pop_fitness_components)
@@ -1123,7 +1116,7 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, do_not_override_default=False,
                   sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                  repeat=1, repeat_spec=None, preprocessing=None, **flatspin_kwargs):
+                  repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -1166,7 +1159,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
         evolved_params = [
             id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
         ]
-        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by)
+        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by, dont_run=dont_run)
         dataset = Dataset.read(shared_params["basepath"])
         queue = dataset
         if group_by:
@@ -1204,7 +1197,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     return pop
 
 
-def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000):
+def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False):
     """modified from run_sweep.py main()"""
     if not evolved_params:
         evolved_params = []
@@ -1261,6 +1254,8 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
     dataset = Dataset(index, params, info, basepath)
     dataset.save()
 
+    if dont_run:
+        return
     # Run!
     # print("Starting sweep with {} runs".format(len(dataset)))
     rs = np.random.get_state()
@@ -1587,13 +1582,23 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
     def preprocessing(run_params):
         if tessellate_shape is not None:
             # do tessellating
+            made_files = set()
             for run in run_params:
-                indv = id2indv[run["indv_id"]]
-                pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2 * nndist,
-                    centre=False, return_labels=True)
-                run["magnet_angles"] = angles
-                run["magnet_coords"] = pos
-                run["labels"] = labels
+                i_id = run["indv_id"]
+                indv = id2indv[i_id]
+                
+                if i_id not in made_files:
+                    pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2 * nndist,
+                        centre=False, return_labels=True)
+                    save_table(pos, os.path.join(outdir, f"indv_{i_id}_geom.npz", "coords"))
+                    save_table(angles, os.path.join(outdir, f"indv_{i_id}_geom.npz", "angles"))
+                    save_table(labels, os.path.join(outdir, f"indv_{i_id}_geom.npz", "labels"))
+                    made_files.add(i_id)
+
+                run["magnet_angles"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "angles")
+                run["magnet_coords"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "coords")
+                run["labels"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "labels")
+
 
         return run_params
 
@@ -1649,6 +1654,31 @@ def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
 
     def fit_func(ds):
         return len(id2indv[ds.index["indv_id"].values[0]].pheno)
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: True,
+                        shared_params=shared_params, **flatspin_kwargs)
+    return pop
+
+
+def smile_fitness(pop, gen, outdir, **flatspin_kwargs):
+    def is_in_smiley(xy):
+        x, y = xy[:, 0], xy[:, 1]
+        left_eye = (x-600)**2 + (y-600)**2 < (400)**2
+        right_eye = (x+600)**2 + (y-600)**2 < (400)**2
+        mouth = np.logical_and(0.00015 * x**2 -500 > y, y > 0.0005 * x**2 -1500)
+        return np.logical_or(np.logical_or(left_eye, right_eye), mouth)
+
+    id2indv = {individual.id: individual for individual in pop}
+    shared_params = {"spp": 1, "periods": 1, "H": 0, "neighbor_distance": 1}
+
+    def fit_func(ds):
+        return id2indv[ds.index["indv_id"].values[0]].fitness
+
+    for indv in pop:
+        if len(indv.pheno) < 100:
+            indv.fitness = np.nan
+        else:
+            indv.fitness = np.sum(is_in_smiley(indv.coords)*2 - 1)
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=lambda x: True,
                         shared_params=shared_params, **flatspin_kwargs)
@@ -1902,6 +1932,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         "ca_rule": ca_rule_fitness,
         "state_num2": state_num_fitness2,
         "novelty": evaluate_outer_novelty_search,
+        "smile": smile_fitness,
     }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
