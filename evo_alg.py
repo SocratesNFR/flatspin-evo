@@ -371,6 +371,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         dataset.save()
 
         best = save_stats(outdir, pop, minimize_fitness)
+        print(f"best fitness: {best.fitness}")
         save_snapshot(outdir, pop)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
                 (minimize_fitness and best.fitness <= stop_at_fitness) or

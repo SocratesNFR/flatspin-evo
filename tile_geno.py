@@ -7,7 +7,7 @@ from flatspin import plotting
 from shapely.geometry import box, MultiPolygon
 from shapely.affinity import rotate, translate
 from shapely.prepared import prep
-from itertools import count
+from itertools import count, permutations
 from functools import cached_property
 from copy import deepcopy, copy
 from collections import Sequence, OrderedDict
@@ -1602,29 +1602,81 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
 
         return run_params
 
+def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None,
+                    squint_grid_size=None, polar_coords=True, fit_acc="mode",function=None, **flatspin_kwargs):
+    from scipy.stats import mode
+    max_state_count = 2**bit_len
+    input = str([list(f"{i:b}".zfill(bit_len)) for i in range(max_state_count)])
+    if function is None:
+        #convert list of bits (str) to int then mod 4
+        function = lambda input: int("".join([c for c in input if c not in "[], "]), 2) % 4
+
+    if not sweep_params:
+        sweep_params = {}
+    if "init" in sweep_params or "input" in sweep_params:
+        warnings.warn("Overiding input in fitness function")
+    sweep_params = dict(sweep_params, input=input)
+
+    if not group_by:
+        group_by = []
+    if "indv_id" not in group_by:
+        group_by.append("indv_id")
+    id2indv = {individual.id: individual for individual in pop}
+    nndist = flatspin_kwargs.get("neighbor_dist", get_default_shared_params(select_param="neighbor_distance"))
+
+    total_spinices = np.prod(tessellate_shape) if tessellate_shape else 1
+
+    
+
+    if t == -1:
+        filter = lambda df: df["t"] == df["t"].max()
+    else:
+        filter = lambda df: df["t"] == t
+
+    def preprocessing(run_params):
+        if tessellate_shape is not None:
+            # do tessellating
+            made_files = set()
+            for run in run_params:
+                i_id = run["indv_id"]
+                indv = id2indv[i_id]
+                
+                if i_id not in made_files:
+                    pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=2 * nndist,
+                        centre=False, return_labels=True)
+                    save_table(pos, os.path.join(outdir, f"indv_{i_id}_geom.npz", "coords"))
+                    save_table(angles, os.path.join(outdir, f"indv_{i_id}_geom.npz", "angles"))
+                    save_table(labels, os.path.join(outdir, f"indv_{i_id}_geom.npz", "labels"))
+                    made_files.add(i_id)
+
+                run["magnet_angles"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "angles")
+                run["magnet_coords"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "coords")
+                run["labels"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "labels")
+
+
+        return run_params
+
     def fit_func(ds):
         spin = better_read_tables(ds.tablefile("spin"), filter)
 
-        state_num = []
+        
         for cell in range(total_spinices):
             if total_spinices > 1:
                 cell_spin = spin[match_column(f"spin({cell},*)", spin)]
             else:
                 cell_spin = spin[match_column("spin*", spin)]
-            state_num.append(len(cell_spin.drop_duplicates()))
-
+            _, states = np.unique(cell_spin, return_inverse=True, axis=0)
+            
+            #get all permutations of 1 2 3 4 
+            perms = np.array(list(permutations(range(4))))
+            perms = np.tile(perms, (1, 4))
+            fitn = np.abs(perms != states).sum(axis=1).min()
+        """
         if len(state_num) == 1:
             fitn = state_num[0]
         else:
-            if fit_acc == "mode":
-                mode_res = mode(state_num)
-                fitn = mode_res.mode[0], 100 * mode_res.count[0] / len(state_num)
-            elif fit_acc == "mean":
-                fitn = np.mean(state_num), 100 / (np.std(state_num) + 1)
-            else:
-                raise ValueError("Unknown fit_acc")
-            if polar_coords:
-                fitn = pol2cart(fitn[1], np.pi * (1 - fitn[0] / max_state_count))
+            pass # not implemented
+        """
         return fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
@@ -1933,6 +1985,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         "state_num2": state_num_fitness2,
         "novelty": evaluate_outer_novelty_search,
         "smile": smile_fitness,
+        "learn_func": learn_function_fitness,
     }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
