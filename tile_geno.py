@@ -1599,8 +1599,49 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
                 run["magnet_coords"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "coords")
                 run["labels"] = os.path.join(outdir, f"indv_{i_id}_geom.npz", "labels")
 
-
         return run_params
+
+    def fit_func(ds):
+        spin = better_read_tables(ds.tablefile("spin"), filter)
+
+        state_num = []
+        for cell in range(total_spinices):
+            if total_spinices > 1:
+                cell_spin = spin[match_column(f"spin({cell},*)", spin)]
+            else:
+                cell_spin = spin[match_column("spin*", spin)]
+            state_num.append(len(cell_spin.drop_duplicates()))
+
+        if len(state_num) == 1:
+            fitn = state_num[0]
+        else:
+            if fit_acc == "mode":
+                mode_res = mode(state_num)
+                fitn = mode_res.mode[0], 100 * mode_res.count[0] / len(state_num)
+            elif fit_acc == "mean":
+                fitn = np.mean(state_num), 100 / (np.std(state_num) + 1)
+            else:
+                raise ValueError("Unknown fit_acc")
+            if polar_coords:
+                fitn = pol2cart(fitn[1], np.pi * (1 - fitn[0] / max_state_count))
+        return fitn
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, preprocessing=preprocessing, **flatspin_kwargs)
+    return pop
+
+
+def ordered_statenumbers(arr):
+    _, inv, counts = np.unique(arr, return_inverse=1, return_counts=1, axis=0)
+
+    if len(counts) == 1:
+        return arr
+    res = np.zeros(len(inv))
+    sort_counts = np.argsort(counts)[::-1]
+    for i in range(len(counts)):
+        res[inv == i] = np.where(sort_counts == i)[0][0]
+
+    return res
+
 
 def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None,
                     squint_grid_size=None, polar_coords=True, fit_acc="mode", function=None, **flatspin_kwargs):
@@ -1679,9 +1720,7 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
                 cell_spin = spin[match_column(f"spin({cell},*)", spin)]
             else:
                 cell_spin = spin[match_column("spin*", spin)]
-            _, states = np.unique(cell_spin, return_inverse=True, axis=0)
-            
-            
+            states = ordered_statenumbers(cell_spin)
             fitn = np.abs(perms != states).sum(axis=1).min()
         """
         if len(state_num) == 1:
