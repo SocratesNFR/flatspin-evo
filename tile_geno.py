@@ -1603,14 +1603,28 @@ def state_num_fitness2(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, gro
         return run_params
 
 def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None, group_by=None, tessellate_shape=None,
-                    squint_grid_size=None, polar_coords=True, fit_acc="mode",function=None, **flatspin_kwargs):
+                    squint_grid_size=None, polar_coords=True, fit_acc="mode", function=None, **flatspin_kwargs):
     from scipy.stats import mode
     max_state_count = 2**bit_len
     input = str([list(f"{i:b}".zfill(bit_len)) for i in range(max_state_count)])
-    if function is None:
-        #convert list of bits (str) to int then mod 4
-        function = lambda input: int("".join([c for c in input if c not in "[], "]), 2) % 4
 
+    def strList2int(s):
+        return int("".join([c for c in s if c not in "[], "]), 2)
+
+    func_image_size = bit_len  # number of desired output states
+    print(function)
+    if function is None:
+        # convert list of bits (str) to int then mod 4
+        function = lambda input: strList2int(input) % 4
+        # get all permutations of 1 2 3 4 
+        perms = np.array(list(permutations(range(4))))
+        perms = np.tile(perms, (1, 4))
+
+    elif function == "prime":
+        function = lambda input: int(input) in [2, 3, 5, 7, 11, 13]
+        func_image_size = 2
+        perms = np.array([[function(i) for i in range(16)], [not function(i) for i in range(16)]])
+    print(perms)
     if not sweep_params:
         sweep_params = {}
     if "init" in sweep_params or "input" in sweep_params:
@@ -1658,7 +1672,7 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
 
     def fit_func(ds):
         spin = better_read_tables(ds.tablefile("spin"), filter)
-
+        nonlocal perms
         
         for cell in range(total_spinices):
             if total_spinices > 1:
@@ -1667,9 +1681,7 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
                 cell_spin = spin[match_column("spin*", spin)]
             _, states = np.unique(cell_spin, return_inverse=True, axis=0)
             
-            #get all permutations of 1 2 3 4 
-            perms = np.array(list(permutations(range(4))))
-            perms = np.tile(perms, (1, 4))
+            
             fitn = np.abs(perms != states).sum(axis=1).min()
         """
         if len(state_num) == 1:
