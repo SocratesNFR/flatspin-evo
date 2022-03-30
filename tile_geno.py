@@ -1634,7 +1634,7 @@ def ordered_statenumbers(arr):
     _, inv, counts = np.unique(arr, return_inverse=1, return_counts=1, axis=0)
 
     if len(counts) == 1:
-        return arr
+        return inv
     res = np.zeros(len(inv))
     sort_counts = np.argsort(counts)[::-1]
     for i in range(len(counts)):
@@ -1653,7 +1653,6 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
         return int("".join([c for c in s if c not in "[], "]), 2)
 
     func_image_size = bit_len  # number of desired output states
-    print(function)
     if function is None:
         # convert list of bits (str) to int then mod 4
         function = lambda input: strList2int(input) % 4
@@ -1665,7 +1664,6 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
         function = lambda input: int(input) in [2, 3, 5, 7, 11, 13]
         func_image_size = 2
         perms = np.array([[function(i) for i in range(16)], [not function(i) for i in range(16)]])
-    print(perms)
     if not sweep_params:
         sweep_params = {}
     if "init" in sweep_params or "input" in sweep_params:
