@@ -1653,14 +1653,16 @@ def learn_function_fitness(pop, gen, outdir, t=-1, bit_len=3, sweep_params=None,
         return int("".join([c for c in s if c not in "[], "]), 2)
 
     func_image_size = bit_len  # number of desired output states
-    if function is None:
+    if type(function) == str and function.startswith("mod"):
         # convert list of bits (str) to int then mod 4
-        function = lambda input: strList2int(input) % 4
-        # get all permutations of 1 2 3 4 
-        perms = np.array(list(permutations(range(4))))
-        perms = np.tile(perms, (1, 4))
+        mod_base = int(function[3:])
+        function = lambda input: strList2int(input) % mod_base
+        # get all permutations of 1 2 3 ... mod_base
+        perms = np.array(list(permutations(range(mod_base))))
+        perms = np.tile(perms, (1, max_state_count // mod_base + 1))[:, :max_state_count]
 
     elif function == "prime":
+        assert bit_len <= 4, "Prime function only implemented for bit_len < 5"
         function = lambda input: int(input) in [2, 3, 5, 7, 11, 13]
         func_image_size = 2
         perms = np.array([[function(i) for i in range(16)], [not function(i) for i in range(16)]])
