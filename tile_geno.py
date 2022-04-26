@@ -12,6 +12,7 @@ from functools import cached_property
 from copy import deepcopy, copy
 from collections import Sequence, OrderedDict
 from time import sleep
+
 import evo_alg as ea
 from PIL import Image
 
@@ -111,7 +112,7 @@ class Individual:
 
     def __repr__(self):
         # defines which attributes are ignored by repr
-        ignore_attributes = ("pheno",)
+        ignore_attributes = ("pheno", "anime")
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
     @property
@@ -159,7 +160,7 @@ class Individual:
             params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
         return Individual(**params)
 
-    def geno2pheno(self, geom_size=40, animate=False, no_change_terminator=1):
+    def geno2pheno(self, geom_size=40, animate=False, no_change_terminator=1, **animation_kwargs):
         frontier, frozen = [], []
         iter_count = 0
         frames = []
@@ -201,7 +202,7 @@ class Individual:
                 since_change += 1
 
         if animate:
-            self.anime = Individual.frames2animation(frames)
+            self.anime = Individual.frames2animation(frames, **animation_kwargs)
             # plt.show()
             # self.anime.save("anime.mp4")
 
@@ -209,7 +210,7 @@ class Individual:
                 centre_magnets(frozen + frontier))
 
     @staticmethod
-    def frames2animation(frames, interval=400, title=False, ax_color="k", color_unchanged=False, figsize=(8, 6), axis_off=False):
+    def frames2animation(frames, interval=400, title=False, ax_color="k", color_method="rainbow", figsize=(8, 6), axis_off=False, constant_zoom=True, repeat_final=0):
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_aspect("equal")
         bounds = np.vstack(
@@ -219,6 +220,8 @@ class Individual:
         ylim = bounds[:, 1].min(), bounds[:, 1].max()
         if title:
             title = list(title)
+        if repeat_final:
+            frames = frames + frames[-1:] * repeat_final
 
         def step(i, maxi, xlim, ylim, title):
             ax.cla()
@@ -226,21 +229,31 @@ class Individual:
                 ax.add_patch(poly)
             if title:
                 ax.set_title(title[i] if len(title) > i else title[-1])
-            ax.set_xlim(xlim)
-            ax.set_ylim(ylim)
+            if constant_zoom:
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
             if axis_off:
                 plt.axis('off')
                 ax.add_artist(ax.patch)
                 ax.patch.set_zorder(-1)
                 fig.subplots_adjust(left=None, bottom=None, right=None, wspace=None, hspace=None)
-
+            if not constant_zoom:
+                ax.autoscale()
             fig.canvas.draw()
 
-        if not color_unchanged:
+        if color_method == "rainbow":
             colours = ea.rainbow_colours(len(frames))
             for frame in frames:
                 for poly in frame:
                     poly.set_color(colours[poly.iterCreated % len(colours)])
+        elif color_method == "current":
+            for i, frame in enumerate(frames):
+                current_iter = max(frame, key=lambda m: m.iterCreated).iterCreated
+                for poly in frame:
+                    if poly.iterCreated == current_iter:
+                        poly.set_color("w")
+                    else:
+                        poly.set_color("r")
         ax.set_facecolor(ax_color)
         return FuncAnimation(fig, step, frames=len(frames), fargs=(len(frames) - 1, xlim, ylim, title),
                              blit=False, interval=interval)
@@ -495,15 +508,19 @@ class Individual:
         return res_info
 
     @staticmethod
-    def known_spinice(name, min_dist=1e-6, **kwargs):
-        min_dist = (min_dist,) * 2 if np.isscalar(min_dist) else min_dist
+    def known_spinice(name, min_dist=None, **kwargs):
+        min_dist = (min_dist,) * 2 if min_dist is not None and np.isscalar(min_dist) else min_dist
         if name == "square":
+            if min_dist is None:
+                min_dist = (10, 10)
             ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
             t = ind.tiles[0]
             t[1].i_set_rot(0)
             t[1].i_set_pos(t[0].pos[0] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[0],
                            t[0].pos[1] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[1])
         elif name == "ising":
+            if min_dist is None:
+                min_dist = (10, 10)
             ind = Individual(init_pheno=False, max_tiles=2, **kwargs)
             t1 = ind.tiles[0]
             t1[1].i_set_rot(t1[0].angle)
@@ -515,12 +532,16 @@ class Individual:
             ind.tiles = [t1, t2]
 
         elif name == "pinwheel":
+            if min_dist is None:
+                min_dist = (50, 50)
             ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
             t = ind.tiles[0]
             t[1].i_set_rot(0)
             t[1].i_set_pos(t[0].pos[0],
                            t[0].pos[1] + t[1].mag_w / 2 + t[1].mag_h / 2 + t[1].padding + min_dist[1])
         elif name == "kagome":
+            if min_dist is None:
+                min_dist = (10, 10)
             # sorry
             ind = Individual(init_pheno=False, max_tiles=1, **kwargs)
             t = ind.tiles[0]
@@ -832,24 +853,29 @@ class Magnet:
         return False
 
     def as_patch(self):
-        patch = patches.Polygon(np.array(self.get_polygon.exterior.coords))
+        patch = patches.Polygon(np.array(self.get_polygon().exterior.coords))
         patch.iterCreated = self.created
         return patch
 
     def i_rotate(self, angle, origin):
         # inplace, rotate anticlockwise
         assert not self.locked
+
+        poly = self.get_polygon()
+        bound = self.get_bound()
         self.angle = (self.angle + angle) % (2 * np.pi)
-        self._as_polygon = rotate(self.get_polygon(), angle, origin, use_radians=True)
-        self._bound = rotate(self.get_bound(), angle, origin, use_radians=True)
-        self.pos = np.array(self.get_polygon().centroid.coords).reshape(2)
+        self._as_polygon = rotate(poly, angle, origin, use_radians=True)
+        self._bound = rotate(bound, angle, origin, use_radians=True)
+        self.pos = np.array(self._as_polygon.centroid.coords).reshape(2)
 
     def i_translate(self, x, y):
         assert not self.locked
         # inplace
+        poly = self.get_polygon()
+        bound = self.get_bound()
         self.pos += np.array((x, y))
-        self._as_polygon = translate(self.get_polygon(), x, y)
-        self._bound = translate(self.get_bound(), x, y)
+        self._as_polygon = translate(poly, x, y)
+        self._bound = translate(bound, x, y)
 
     def i_set_pos(self, x, y):
         self.i_translate(x - self.pos[0], y - self.pos[1])
