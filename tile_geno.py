@@ -1142,7 +1142,7 @@ def get_default_run_params(pop, sweep_list, *, condition=None):
 
 def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, do_not_override_default=False,
                   sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                  repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, **flatspin_kwargs):
+                  repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, **flatspin_kwargs):
     """
     fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
     if an Individual already has fitness components the value(s) will be appended
@@ -1185,7 +1185,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
         evolved_params = [
             id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
         ]
-        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by, dont_run=dont_run)
+        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by, dont_run=dont_run, dependent_params=dependent_params)
         dataset = Dataset.read(shared_params["basepath"])
         queue = dataset
         if group_by:
@@ -1223,7 +1223,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     return pop
 
 
-def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False):
+def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}):
     """modified from run_sweep.py main()"""
     if not evolved_params:
         evolved_params = []
@@ -1268,6 +1268,11 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
             run_params.update(
                 {k: v for k, v in evolved_params[i].items() if k in newparams}
             )
+        if dependent_params:
+            # get any dependent params in dependent_params and update run param with them
+            dp = eval_params(dependent_params, run_params)
+            run_params.update(dp)
+            
         sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
@@ -2135,6 +2140,13 @@ if __name__ == "__main__":
         help="param past to outer evaluate fitness function",
     )
     parser.add_argument(
+        "-d",
+        "--dependent_param",
+        action=StoreKeyValue,
+        default={},
+        help="use for flatspin param that is dependent on other params (e.g. -e H=[0.5,1] -d 'H0=-H*2')"
+    )
+    parser.add_argument(
         "--group-by", nargs="*", help="group by parameter(s) for fitness evaluation"
     )
     parser.add_argument(
@@ -2147,7 +2159,7 @@ if __name__ == "__main__":
     evolved_params = eval_params(args.evolved_param)
     if args.evo_rotate:
         evolved_params["initial_rotation"] = [0, 2 * np.pi]
-
+    
     outpath = os.path.join(os.path.curdir, args.output)
     logpath = os.path.join(outpath, args.log)
     if not os.path.exists(outpath):
@@ -2160,6 +2172,7 @@ if __name__ == "__main__":
         individual_params=eval_params(args.individual_param),
         outer_eval_params=eval_params(args.outer_eval_param),
         sweep_params=args.sweep_param,
+        dependent_params=args.dependent_param,
         repeat=args.repeat,
         repeat_spec=args.repeat_spec,
         group_by=args.group_by,

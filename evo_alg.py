@@ -295,7 +295,8 @@ def setup_evolved_params(evolved_params, individual_class):
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
-         outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), stop_at_fitness=None, group_by=None,
+         outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
+         stop_at_fitness=None, group_by=None,
          starting_pop=None, continue_run=False, starting_gen=1, **kwargs):
 
     print("Initialising")
@@ -315,7 +316,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             pop = parse_starting_pop(starting_pop, individual_class)
         else:
             pop = [individual_class(**individual_params) for _ in range(pop_size)]
-        evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+        evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
         # create superdataset
         index = pd.DataFrame()
@@ -355,7 +356,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         if reval_inner:  # do we re-evealuate all inner fitnesses?
             pop.extend(new_kids)
             list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
-            evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+            evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         else:
             evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
             pop.extend(new_kids)
