@@ -1148,6 +1148,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
     if an Individual already has fitness components the value(s) will be appended
     (allows for multiple datasets per Individual)
     """
+
     if len(pop) < 1:
         return pop
     sweep_list = (
@@ -1272,7 +1273,7 @@ def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, ma
             # get any dependent params in dependent_params and update run param with them
             dp = eval_params(dependent_params, run_params)
             run_params.update(dp)
-            
+
         sub_run_name = newparams.get("sub_run_name", "x")
         outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
         filenames.append(outdir)
@@ -1530,7 +1531,7 @@ def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
         t = slice(spp - 1, None, spp)
         scores = do_mem_capacity(ds, delays, t=t)
         fitness_components = scores.mean(axis=-1)
-        print("MC", np.sum(fitness_components), len(ds))
+        #print("MC", np.sum(fitness_components), len(ds))
         return fitness_components
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **kwargs)
@@ -2031,13 +2032,7 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
                np.std([len(indv.grid.point_index([x, y]))
                       for x, y in cells_with_mags])
         """
-        fitn = abs(
-            (
-                (np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold)
-                * 2
-                - 1
-            ).sum()
-        )
+        fitn = abs(((np.array([magnitude[x][y] for x, y in cells_with_mags]) < threshold) * 2 - 1).sum())
 
         return fitn
 

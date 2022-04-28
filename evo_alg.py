@@ -335,12 +335,14 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             print(f"~{np.round(tr / 3600, 2)} hours remaining" if tr > 3600 else (
                 f"~{np.round(tr / 60, 2)} minutes remaining" if tr > 60 else f"~{np.round(tr, 2)} seconds remaining"))
         time = datetime.now()
+
         # Mutate!
         print("    Mutate")
         new_kids = []
         for indv in pop:
             if np.random.rand() < mut_prob:
                 new_kids += indv.mutate(mut_strength)
+
         # Crossover!
         print("    Crossover")
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
@@ -351,14 +353,14 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         for indv in new_kids:
             indv.gen = gen
 
-            # Eval
+        # Eval
         print("    Evaluate")
         if reval_inner:  # do we re-evealuate all inner fitnesses?
             pop.extend(new_kids)
             list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
             evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         else:
-            evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
+            evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
             pop.extend(new_kids)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
 
