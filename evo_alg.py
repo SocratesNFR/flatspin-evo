@@ -364,14 +364,15 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             pop.extend(new_kids)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
 
+        update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
+        dataset.save()
+        
         # Select
         print("    Select")
         pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
         assert len(pop) <= pop_size
 
-        update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
-        dataset.save()
 
         best = save_stats(outdir, pop, minimize_fitness)
         print(f"best fitness: {best.fitness}")
