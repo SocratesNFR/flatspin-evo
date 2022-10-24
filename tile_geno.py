@@ -33,6 +33,23 @@ from matplotlib import patches
 from matplotlib.animation import FuncAnimation, writers
 import logging
 
+from tqdm.auto import tqdm
+from joblib import Parallel, delayed
+
+
+class ProgressBar(tqdm):
+    pass
+
+
+class ParallelProgress(Parallel):
+    def __init__(self, progress_bar, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._progress_bar = progress_bar
+
+    def print_progress(self):
+        inc = self.n_completed_tasks - self._progress_bar.n
+        self._progress_bar.update(inc)
+
 
 class Individual:
     _id_counter = count(0)
@@ -1075,7 +1092,7 @@ def get_default_shared_params(outdir="", gen=None, select_param=None):
         "H": 0.01,
         "phi": 90,
         "radians": True,
-        "alpha": 30272,
+        "alpha": 37839,
         "sw_b": 0.4,
         "sw_c": 1,
         "sw_beta": 3,
@@ -1795,6 +1812,123 @@ def pheno_size_fitness(pop, gen, outdir, **flatspin_kwargs):
     return pop
 
 
+def directionality_fitness(pop, gen, outdir, tessellate_shape=(8, 8), **flatspin_kwargs):
+    id2indv = {individual.id: individual for individual in pop}
+    shared_params = {"spp": 1, "periods": 1, "H": 0, "neighbor_distance": 1, "timesteps": 1, "alpha":37839}
+    from flatspin.model import CustomSpinIce
+    from shapely.ops import nearest_points
+
+    def min_dist_between_any_mags(pos, angles, mag_w, mag_h):
+        mags = [Magnet(0, p, a, mag_w, mag_h) for p, a in zip(pos, angles)]
+        dist = np.inf
+        mini = 0
+        minj = 0
+        for i in range(len(mags)):
+            for j in range(i + 1, len(mags)):
+                d = mags[i].get_polygon().distance(mags[j].get_polygon())
+                if d < dist:
+                    dist = d
+                    mini = i
+                    minj = j
+        return dist, nearest_points(mags[mini].get_polygon(), mags[minj].get_polygon())
+
+    def smallest_dist(points):
+        np.array(points)
+        dist = np.inf
+        for i in range(len(points)):
+            for j in range(i + 1, len(points)):
+                d = np.linalg.norm(points[i] - points[j])
+                if d < dist:
+                    dist = d
+        return dist
+    def tess(indv):
+        """
+        starting_min_dist, _ = min_dist_between_any_mags(indv.coords, indv.angles, indv.mag_w, indv.mag_h)
+        priori_pad = 2 * (indv.mag_w + indv.mag_h)
+        # find x pad
+        p, a = indv.fast_tessellate(indv.pheno, (2, 1), padding=priori_pad, centre=False, return_labels=False)
+        min_xdist, points = min_dist_between_any_mags(p, a, indv.mag_w, indv.mag_h)
+        xpad = np.sqrt(-(np.abs(points[0].y - points[1].y) ** 2) + starting_min_dist ** 2)
+        xpad = 0 if np.isnan(xpad) else xpad
+        # find y pad
+        p, a = indv.fast_tessellate(indv.pheno, (1, 2), padding=priori_pad, centre=False, return_labels=False)
+        min_ydist, points = min_dist_between_any_mags(p, a, indv.mag_w, indv.mag_h)
+
+        ypad = np.sqrt(-(np.abs(points[0].x - points[1].x) ** 2) + starting_min_dist ** 2)
+
+        ypad = 0 if np.isnan(ypad) else ypad
+        """
+        #norm_factor = smallest_dist(indv.coords)
+        pad = max(indv.mag_h, indv.mag_w) + indv.pheno[0].padding
+        xpad, ypad = pad, pad
+
+        pos, angles, labels = Individual.fast_tessellate(indv.pheno, tessellate_shape, padding=np.array([xpad, ypad]),
+                        centre=False, return_labels=True)
+
+        return pos, angles, labels
+
+    def total_h_par_dir(model):
+        if model.cl:
+            model._init_cl()# TODO: fixme
+        h_dip_perp = np.nan * np.zeros((model.spin_count, model.num_neighbors, 2))
+        for i in model.indices():
+            for jj, j in enumerate(model.neighbors(i)):
+                rij = model.pos[i] - model.pos[j]
+                rdir = rij / np.linalg.norm(rij)
+
+                h_perp = rdir * np.abs(model._h_dip[i, jj, 1])
+                h_dip_perp[i, jj] = h_perp
+
+        return np.abs(np.nansum(h_dip_perp))
+    id2pos = {}
+    id2angles = {}
+    id2labels = {}
+
+    def do_fit_func(id):
+        indv = id2indv[id]
+        pos, angles, labels = tess(indv)
+        #print(pos)
+
+        model = CustomSpinIce(magnet_coords=pos, magnet_angles=angles, labels=labels, neighbor_distance=np.inf, alpha=37839)
+        return total_h_par_dir(model), (pos, angles, labels)
+
+    def preprocessing(run_params):
+        if tessellate_shape is not None:
+            # do tessellating
+            made_files = set()
+            for run in run_params:
+                i_id = run["indv_id"]
+
+                run["magnet_angles"] = id2angles[i_id]
+                run["magnet_coords"] = id2pos[i_id]
+                run["labels"] = id2labels[i_id]
+
+
+        return run_params
+
+    id2fit = {}
+    progress_bar = ProgressBar(desc="calc fitness", total=len(id2indv))
+    parallel = ParallelProgress(progress_bar, n_jobs=-1)
+
+    def helper(id):
+        fit, pal = do_fit_func(id)
+        return id, (fit, pal)
+
+    id2fit.update(parallel(delayed(helper)(id) for id in id2indv))
+    progress_bar.close()
+    # get the extra data out of id2fit
+    for id in id2fit:
+        id2pos[id], id2angles[id], id2labels[id] = id2fit[id][1]
+        id2fit[id] = id2fit[id][0]
+
+    def fit_func(ds):
+        return id2fit[ds.index["indv_id"].values[0]]
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, dont_run=False, condition=lambda x: True,
+                        shared_params=shared_params, preprocessing=preprocessing, **flatspin_kwargs)
+    return pop
+
+
 def smile_fitness(pop, gen, outdir, **flatspin_kwargs):
     def is_in_smiley(xy):
         x, y = xy[:, 0], xy[:, 1]
@@ -2063,6 +2197,7 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         "novelty": evaluate_outer_novelty_search,
         "smile": smile_fitness,
         "learn_func": learn_function_fitness,
+        "direction": directionality_fitness,
     }
     inner = known_fits.get(inner, inner)
     outer = known_fits.get(outer, outer)
