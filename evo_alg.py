@@ -126,21 +126,6 @@ def save_stats(outdir, pop, minimize_fitness):
     return best
 
 
-def top_of_the_pops(result, individual_class, interval=400, compress=True):
-    frames = []
-    titles = []
-    prev_id = None
-    gen_i = 0
-    for indv in [gen["bestIndv"] for gen in result]:
-        parsedIndv = individual_class.from_string(indv)
-        if not compress or (prev_id is None or prev_id != parsedIndv.id):
-            frames.append(list(map(lambda m: m.as_patch(), parsedIndv.pheno)))
-            titles.append(f"id = {parsedIndv.id}; gen = {gen_i}; fit = {parsedIndv.fitness}")
-            prev_id = parsedIndv.id
-        gen_i += 1
-    return individual_class.frames2animation(frames, interval, title=titles)
-
-
 def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
 
@@ -188,7 +173,7 @@ def save_snapshot(outdir, pop):
 
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
         *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None,
-        starting_pheno=None, keep_id=False, **kwargs):
+        keep_id=False, **kwargs):
 
     check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
@@ -209,20 +194,11 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
             starting_pop = f.read().splitlines()
     except Exception:
         pass
-    if starting_pheno:
-        try:
-            with open(starting_pheno, "r") as f:
-                starting_pheno = f.read().splitlines()
-        except Exception:
-            pass
-        starting_phenos = [individual_class.pheno_from_string(pheno) for pheno in starting_pheno]
-    pop = [individual_class.from_string(i, gen=0, init_pheno=starting_pheno is None) for i in starting_pop]
+
+    pop = [individual_class.from_string(i, gen=0) for i in starting_pop]
     if not keep_id:
         for i, indv in enumerate(pop):
             indv.id = i
-    if starting_pheno:
-        for indv, pheno in zip(pop, starting_phenos):
-            indv.pheno = pheno
 
     evaluate_inner(pop, 0, outdir, sweep_params=sweep_params, group_by=group_by, **kwargs)
     evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
@@ -366,20 +342,18 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
         update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
         dataset.save()
-        
+
         # Select
         print("    Select")
         pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         # pop = fittestSelect(pop, popSize)
         assert len(pop) <= pop_size
 
-
         best = save_stats(outdir, pop, minimize_fitness)
         print(f"best fitness: {best.fitness}")
         save_snapshot(outdir, pop)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
-                (minimize_fitness and best.fitness <= stop_at_fitness) or
-                ((not minimize_fitness) and best.fitness >= stop_at_fitness)
+                (minimize_fitness and best.fitness <= stop_at_fitness) or ((not minimize_fitness) and best.fitness >= stop_at_fitness)
         ):
             print(f"Halting early, fitness {best.fitness} achieved")
             print(stop_at_fitness is not None, minimize_fitness and best.fitness <= stop_at_fitness,
@@ -388,4 +362,3 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         gen_times.append((datetime.now() - time).total_seconds())
     # best.plot()
     return best
-    
