@@ -86,6 +86,31 @@ def fittest_select(pop, pop_size, minimize_fit):
     return new_pop
 
 
+def tournament_select(pop, pop_size, tournament_size, elitism=False, minimize_fit=True):
+    if len(pop) < pop_size:
+        return pop
+    new_pop = []
+    if elitism:
+        best = min(pop, key=lambda indv: indv.fitness) if minimize_fit else max(pop, key=lambda indv: indv.fitness)
+        new_pop.append(best)
+        pop.remove(best)
+
+    for _ in range(pop_size):
+        if len(pop) < tournament_size:
+            if len(pop) == 0:
+                break
+            best = min(pop, key=lambda indv: indv.fitness) if minimize_fit else max(pop, key=lambda indv: indv.fitness)
+        else:
+            tournament = np.random.choice(pop, tournament_size, replace=False)
+            if minimize_fit:
+                best = min(tournament, key=lambda indv: indv.fitness)
+            else:
+                best = max(tournament, key=lambda indv: indv.fitness)
+            new_pop.append(best)
+            pop.remove(best)
+    return new_pop
+
+
 def parse_file(filename):
     with open(filename) as f:
         lines = f.readlines()
@@ -273,7 +298,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, **kwargs):
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -345,8 +370,15 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
         # Select
         print("    Select")
-        pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
-        # pop = fittestSelect(pop, popSize)
+        if select == "best":
+            pop = fittest_select(pop, pop_size)
+        elif select == "roulette":
+            pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
+        elif select == "tournament":
+            pop = tournament_select(pop, pop_size, elitism, minimize_fitness)
+        else:
+            raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette' or 'tournament'")
+
         assert len(pop) <= pop_size
 
         best = save_stats(outdir, pop, minimize_fitness)
