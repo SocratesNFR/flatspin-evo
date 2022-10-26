@@ -208,9 +208,13 @@ class Individual(Base_Individual):
 
         return Individual(**kwargs)
 
-    def ___repr__(self):
+    def __repr__(self):
+        print(self.__dict__)
         ignored_attrs = ['pos', 'angle']
         return repr({k: v for k, v in vars(self).items() if k not in ignored_attrs})
+
+
+
 
     def copy(self, **override_kwargs):
         ignored_attrs = ['pos', 'angle', 'id', 'gen']

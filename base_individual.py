@@ -91,8 +91,8 @@ class Base_Individual(ABC):
         sweep_list = sweep_list or [[0, 0, {}]]
 
         if not condition:
-            def condition(x):
-                return True
+            def condition(indv):
+                len(indv.coords) > 0
 
         id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
 
