@@ -92,7 +92,7 @@ class Base_Individual(ABC):
 
         if not condition:
             def condition(indv):
-                len(indv.coords) > 0
+                return len(indv.coords) > 0
 
         id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
 
