@@ -86,7 +86,7 @@ def fittest_select(pop, pop_size, minimize_fit):
     return new_pop
 
 
-def tournament_select(pop, pop_size, tournament_size, elitism=False, minimize_fit=True):
+def tournament_select(pop, pop_size, tournament_size=7, elitism=False, minimize_fit=True):
     if len(pop) < pop_size:
         return pop
     new_pop = []
@@ -375,7 +375,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         elif select == "roulette":
             pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         elif select == "tournament":
-            pop = tournament_select(pop, pop_size, elitism, minimize_fitness)
+            pop = tournament_select(pop, pop_size, elitism=elitism, minimize_fitness=minimize_fitness)
         else:
             raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette' or 'tournament'")
 
