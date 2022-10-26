@@ -72,6 +72,14 @@ class Individual(Base_Individual):
         angle = []
         i = 0
         perm, inv_perm = self.perm_from_sort()
+
+        # find min magnitude
+        min_magn = min([np.linalg.norm(self.basis0), np.linalg.norm(self.basis1)])
+
+        # scale basis vectors
+        scaled_basis0 = self.basis0 / min_magn
+        scaled_basis1 = self.basis1 / min_magn
+
         while frontier:
             point = frontier.pop()
             symbol = symbol_frontier.pop()
