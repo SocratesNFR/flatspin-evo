@@ -375,7 +375,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         elif select == "roulette":
             pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         elif select == "tournament":
-            pop = tournament_select(pop, pop_size, elitism=elitism, minimize_fitness=minimize_fitness)
+            pop = tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness)
         else:
             raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette' or 'tournament'")
 
