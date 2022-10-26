@@ -371,7 +371,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         # Select
         print("    Select")
         if select == "best":
-            pop = fittest_select(pop, pop_size)
+            pop = fittest_select(pop, pop_size, minimize_fitness)
         elif select == "roulette":
             pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         elif select == "tournament":

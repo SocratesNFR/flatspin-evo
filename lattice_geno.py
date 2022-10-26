@@ -1,3 +1,4 @@
+from turtle import window_height
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import count
@@ -123,13 +124,13 @@ class Individual(Base_Individual):
 
     # ======= Mutation helpers =======================================================
     @staticmethod
-    def gaussian_mutation(values, sigma, min=None, max=None, ignore_negative=False):
+    def gaussian_mutation(values, std, low=None, high=None, ignore_negative=False):
         negatives = values * (values < 0) if ignore_negative else None
-        values = np.random.normal(values, sigma)
-        if min is not None:
-            values = np.maximum(values, min)
-        if max is not None:
-            values = np.minimum(values, max)
+        values = np.random.normal(values, std)
+        if low is not None:
+            values = np.maximum(values, low)
+        if high is not None:
+            values = np.minimum(values, high)
 
         if negatives is not None:  # restore negatives
             values = values * (negatives == 0) + negatives
@@ -143,15 +144,15 @@ class Individual(Base_Individual):
 
     @staticmethod
     def mutate_bases(child, strength):
-        sigma = (Individual.basis_max - Individual.basis_min) * strength * 0.05
-        child.basis0 = Individual.gaussian_mutation(child.basis0, sigma=sigma, min=(Individual.basis_min, 0), max=(Individual.basis_max, 0))
-        child.basis1 = Individual.gaussian_mutation(child.basis1, sigma=sigma, min=(0, Individual.basis_min), max=Individual.basis_max)
+        std = (Individual.basis_max - Individual.basis_min) * strength * 0.05
+        child.basis0 = Individual.gaussian_mutation(child.basis0, std=std, low=(Individual.basis_min, 0), high=(Individual.basis_max, 0))
+        child.basis1 = Individual.gaussian_mutation(child.basis1, std=std, low=(0, Individual.basis_min), high=Individual.basis_max)
 
     @staticmethod
     def mutate_code(child, strength):
         if np.random.rand() < 0.5:
-            sigma = strength * 0.05
-            child.code = Individual.gaussian_mutation(child.code, sigma=sigma, min=0, max=1)
+            std = strength * 0.05
+            child.code = Individual.gaussian_mutation(child.code, std=std, low=0, high=1)
         else:
             Individual.swap_mutation(child.code)
 
@@ -159,8 +160,8 @@ class Individual(Base_Individual):
     def mutate_angle_array(child, strength):
         rand = np.random.rand()
         if rand < 0.4:
-            sigma = strength * 0.05
-            child.angle_array = Individual.gaussian_mutation(child.angle_array, sigma=sigma, min=0, max=np.pi * 2, ignore_negative=True)
+            std = strength * 0.05
+            child.angle_array = Individual.gaussian_mutation(child.angle_array, std=std, low=0, high=np.pi * 2, ignore_negative=True)
         elif rand < 0.8:
             Individual.swap_mutation(child.angle_array)
         else:
@@ -191,7 +192,12 @@ class Individual(Base_Individual):
     def mutate(self, strength=1):
         child = self.copy()
         mutations = [Individual.mutate_bases, Individual.mutate_code, Individual.mutate_angle_array]
-        mutation = np.random.choice(mutations)
+        weights = [1] * len(mutations)
+        if len(self.evolved_params_values) > 0:
+            mutations += [Individual.mutate_evo_param]
+            # increase chance of selecting param-mutation by the num of evo params so they are picked evenly
+            weights += [len(self.evolved_params_values)]
+        mutation = np.random.choice(mutations, p=np.array(weights) / np.sum(weights))
         mutation(child, strength)
         return [child]
 
@@ -199,6 +205,7 @@ class Individual(Base_Individual):
         child = self.copy()
         Individual.crossover_bases(child, other)
         Individual.crossover_code_and_angle_array(child, other)
+        child.evolved_params_values = Individual.crossover_evo_params([child, other])
         return [child]
 
     def from_string(string, **overide_kwargs):
@@ -211,9 +218,6 @@ class Individual(Base_Individual):
     def __repr__(self):
         ignored_attrs = ['pos', 'angle']
         return repr({k: v for k, v in vars(self).items() if k not in ignored_attrs})
-
-
-
 
     def copy(self, **override_kwargs):
         ignored_attrs = ['pos', 'angle', 'id', 'gen']

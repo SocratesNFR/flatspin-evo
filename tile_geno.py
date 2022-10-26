@@ -270,13 +270,7 @@ class Individual(Base_Individual):
             plt.gca().set_aspect(1)
             plt.autoscale()
 
-    @staticmethod
-    def gauss_mutate(x, std, low=None, high=None):
-        x = np.random.normal(x, std)
-        if low is not None or high is not None:
-            x = np.clip(x, low, high)
-        return x
-
+    
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy(refresh=False)
@@ -397,14 +391,7 @@ class Individual(Base_Individual):
         child.tiles = tiles
         return child
 
-    @staticmethod
-    def crossover_evo_params(parents):
-        """return new dict of evo params from randomly choosing between params of each parent"""
-        evo_params = deepcopy(parents[0].evolved_params_values)
-        for param, rnd in zip(evo_params, np.random.random(len(evo_params))):
-            if rnd > 0.5:
-                evo_params[param] = deepcopy(parents[1].evolved_params_values[param])
-        return evo_params
+    
 
     @staticmethod
     def mutate_magnet_pos(clone, strength):
@@ -486,25 +473,6 @@ class Individual(Base_Individual):
         )
         return f"added 1 random tile"
 
-    @staticmethod
-    def mutate_evo_param(clone, strength):
-        param_name = np.random.choice(list(clone.evolved_params_values))
-        mut_param_info = Individual._evolved_params[param_name]
-
-        new_val = Individual.gauss_mutate(
-            clone.evolved_params_values[param_name],
-            strength * (mut_param_info["high"] - mut_param_info["low"]) / 200,
-        )
-
-        res_info = f"{param_name} changed {clone.evolved_params_values[param_name]} -> {new_val}"
-
-        if new_val == clone.evolved_params_values[param_name]:
-            # mutation failed, terminate clone!
-            clone = None
-        else:
-            clone.evolved_params_values[param_name] = new_val
-
-        return res_info
 
     @staticmethod
     def known_spinice(name, min_dist=None, **kwargs):

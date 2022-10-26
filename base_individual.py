@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Union
 import numpy as np
 import os
 import warnings
+from copy import deepcopy
 
 numeric = Union[int, float, np.number]
 
@@ -62,6 +63,42 @@ class Base_Individual(ABC):
         :param other: the other individual to crossover with
         :return: a list of 1 or more new individuals (return empty list if crossover fails or not implemented)
         """
+
+    @staticmethod
+    def crossover_evo_params(parents):
+        """return new dict of evo params from randomly choosing between params of each parent"""
+        evo_params = deepcopy(parents[0].evolved_params_values)
+        for param, rnd in zip(evo_params, np.random.random(len(evo_params))):
+            if rnd > 0.5:
+                evo_params[param] = deepcopy(parents[1].evolved_params_values[param])
+        return evo_params
+
+    @staticmethod
+    def gauss_mutate(x, std, low=None, high=None):
+        x = np.random.normal(x, std)
+        if low is not None or high is not None:
+            x = np.clip(x, low, high)
+        return x
+
+    @staticmethod
+    def mutate_evo_param(clone, strength):
+        param_name = np.random.choice(list(clone.evolved_params_values))
+        mut_param_info = clone._evolved_params[param_name]
+
+        new_val = clone.gauss_mutate(
+            clone.evolved_params_values[param_name],
+            strength * (mut_param_info["high"] - mut_param_info["low"]) / 20,
+        )
+
+        res_info = f"{param_name} changed {clone.evolved_params_values[param_name]} -> {new_val}"
+
+        if new_val == clone.evolved_params_values[param_name]:
+            # mutation failed, terminate clone!
+            clone = None
+        else:
+            clone.evolved_params_values[param_name] = new_val
+
+        return res_info
 
     @abstractmethod
     def from_string(string):
