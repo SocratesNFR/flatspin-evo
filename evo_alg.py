@@ -73,8 +73,8 @@ def nan_select_filter(func):
         nan_pop, pop = [], []
         for indv in pop:
             (pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
-
-        pop = func(pop, pop_size, *args, **kwargs)
+        if pop:
+            pop = func(pop, pop_size, *args, **kwargs)
         if len(pop) < pop_size:
             pop += list(np.random.choice(nan_pop, min(pop_size - len(pop), len(nan_pop)), replace=False))
 
