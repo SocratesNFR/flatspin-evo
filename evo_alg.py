@@ -70,11 +70,12 @@ def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
 def nan_select_filter(func):
     @wraps(func)
     def wrapper(pop, pop_size, *args, **kwargs):
-        nan_pop, pop = [], []
+        nan_pop, fin_pop = [], []
         for indv in pop:
-            (pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
-        if pop:
-            pop = func(pop, pop_size, *args, **kwargs)
+            (fin_pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
+
+        if fin_pop:
+            pop = func(fin_pop, pop_size, *args, **kwargs)
         if len(pop) < pop_size:
             pop += list(np.random.choice(nan_pop, min(pop_size - len(pop), len(nan_pop)), replace=False))
 
