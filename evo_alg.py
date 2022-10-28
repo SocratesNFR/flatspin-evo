@@ -79,6 +79,7 @@ def nan_select_filter(func):
             pop += list(np.random.choice(nan_pop, min(pop_size - len(pop), len(nan_pop)), replace=False))
 
         return pop
+    return wrapper
 
 
 @nan_select_filter
