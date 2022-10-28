@@ -1,4 +1,3 @@
-from turtle import window_height
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import count
@@ -16,17 +15,19 @@ import evo_alg as ea
 
 class Individual(Base_Individual):
     _id_counter = count(0)
-    basis_min = 0.5
-    basis_max = 1
+    basis_min = 0.3
+    basis_max = 1.3
+    min_angle_offset = np.deg2rad(10)
 
     def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, **kwargs):
         self.gen = gen
         self.pheno_bounds = pheno_bounds
+        self.code_len = code_len
 
         self.id = next(self._id_counter) if id is None else id
 
-        self.basis0 = basis0 if basis0 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, 0))
-        self.basis1 = basis1 if basis1 is not None else np.array((np.random.rand() * Individual.basis_max, np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min))
+        self.basis0 = basis0 if basis0 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, np.random.rand() * np.pi))
+        self.basis1 = basis1 if basis1 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, np.random.rand() * (np.pi - 2 * Individual.min_angle_offset) + Individual.min_angle_offset))
 
         self.code = code if code is not None else np.random.rand(code_len)
         if angle_array is None:
@@ -74,21 +75,27 @@ class Individual(Base_Individual):
         i = 0
         perm, inv_perm = self.perm_from_sort()
 
+        # calculate basis from magnitude and angle
+        basis0 = (self.basis0[0] * np.array((np.cos(self.basis0[1]), np.sin(self.basis0[1]))))
+        b1_angle = self.basis1[1] + self.basis0[1]
+        basis1 = (self.basis1[0] * np.array((np.cos(b1_angle), np.sin(b1_angle))))
+
         # find min magnitude
-        min_magn = min([np.linalg.norm(self.basis0), np.linalg.norm(self.basis1)])
+        min_magn = min([np.linalg.norm(basis0), np.linalg.norm(basis1)])
 
         # scale basis vectors
-        scaled_basis0 = self.basis0 / min_magn
-        scaled_basis1 = self.basis1 / min_magn
+        scaled_basis0 = basis0 / min_magn
+        scaled_basis1 = basis1 / min_magn
 
         while frontier:
             point = frontier.pop()
             symbol = symbol_frontier.pop()
-            new_pos = [tuple(np.round((point[0] + sign * b[0], point[1] + sign * b[1]), 5)) for b in (self.basis0, self.basis1) for sign in (-1, 1)]
+            new_pos = [tuple(np.round((point[0] + sign * b[0], point[1] + sign * b[1]), 5)) for b in (scaled_basis0, scaled_basis1) for sign in (-1, 1)]
 
             # new_sym = [(perm if basis == 0 else inv_perm)[symbol if sign == 1 else -1 - symbol] for basis in (0, 1) for sign in (-1, 1)]
             # new_sym = [(perm if basis * sign > 0 else inv_perm)[symbol] for basis in (1, -1) for sign in (1, -1)]
-            new_sym = [(perm if basis == 0 else inv_perm)[symbol] for basis in (0, 1) for sign in (-1, 1)]
+            # new_sym = [(perm if basis == 0 else inv_perm)[symbol] for basis in (0, 1) for sign in (-1, 1)]
+            new_sym = [(basis * 2 - 1 + symbol) % self.code_len for basis in (0, 1) for sign in (-1, 1)]
 
             new_pos, new_sym = list(zip(*[(p, s) for p, s in zip(new_pos, new_sym) if self.is_in_bounds(p) and p not in seen])) or [[], []]
 
@@ -293,7 +300,7 @@ if __name__ == "__main__":
 
         indvs = []
         while len(indvs) < 25:
-            ind = Individual(code_len=7, pheno_bounds=(15, 15))
+            ind = Individual(code_len=10, pheno_bounds=(15, 15))
             if ind.pos:
                 indvs.append(ind)
         for i, indv in enumerate(indvs):

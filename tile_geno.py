@@ -270,7 +270,6 @@ class Individual(Base_Individual):
             plt.gca().set_aspect(1)
             plt.autoscale()
 
-    
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
         clone = self.copy(refresh=False)
@@ -391,8 +390,6 @@ class Individual(Base_Individual):
         child.tiles = tiles
         return child
 
-    
-
     @staticmethod
     def mutate_magnet_pos(clone, strength):
         # pick a tile at random, pick a magnet excluding the first magnet
@@ -472,7 +469,6 @@ class Individual(Base_Individual):
             )
         )
         return f"added 1 random tile"
-
 
     @staticmethod
     def known_spinice(name, min_dist=None, **kwargs):

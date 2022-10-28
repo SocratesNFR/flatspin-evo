@@ -1,4 +1,5 @@
 # vim: tw=120
+from functools import wraps
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -66,17 +67,23 @@ def roulette_select(pop, pop_size, elitism=False, minimize_fit=True):
     return new_pop
 
 
+def nan_select_filter(func):
+    @wraps(func)
+    def wrapper(pop, pop_size, *args, **kwargs):
+        nan_pop, pop = [], []
+        for indv in pop:
+            (pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
+
+        pop = func(pop, pop_size, *args, **kwargs)
+        if len(pop) < pop_size:
+            pop += list(np.random.choice(nan_pop, min(pop_size - len(pop), len(nan_pop)), replace=False))
+
+        return pop
+
+
+@nan_select_filter
 def fittest_select(pop, pop_size, minimize_fit):
     fits = np.fromiter(map(lambda p: p.fitness, pop), count=len(pop), dtype=np.float64)
-
-    is_finite = np.isfinite(fits)
-    fits = fits[is_finite]
-    nan_pop = [pop[i] for i in np.arange(len(pop))[~is_finite]]
-    pop = [pop[i] for i in np.arange(len(pop))[is_finite]]
-    if len(pop) < pop_size:
-        # if not enough to select from: return all indvs with none nan fitness and select remainder randomly
-        pop += list(np.random.choice(nan_pop, pop_size - len(pop), replace=False))
-        return pop
 
     if minimize_fit:
         fits = -1 * fits
@@ -86,6 +93,7 @@ def fittest_select(pop, pop_size, minimize_fit):
     return new_pop
 
 
+@nan_select_filter
 def tournament_select(pop, pop_size, tournament_size=7, elitism=False, minimize_fit=True):
     if len(pop) < pop_size:
         return pop
