@@ -152,8 +152,12 @@ class Individual(Base_Individual):
     @staticmethod
     def mutate_bases(child, strength):
         std = (Individual.basis_max - Individual.basis_min) * strength * 0.05
-        child.basis0 = Individual.gaussian_mutation(child.basis0, std=std, low=(Individual.basis_min, 0), high=(Individual.basis_max, 0))
-        child.basis1 = Individual.gaussian_mutation(child.basis1, std=std, low=(0, Individual.basis_min), high=Individual.basis_max)
+        child.basis0[0] = Individual.gaussian_mutation(child.basis0[0], std, low=Individual.basis_min, high=Individual.basis_max)
+        child.basis0[1] = Individual.gaussian_mutation(child.basis0[1], std, low=0, high=np.pi)
+
+        child.basis1[0] = Individual.gaussian_mutation(child.basis1[0], std, low=Individual.basis_min, high=Individual.basis_max)
+        child.basis1[1] = Individual.gaussian_mutation(child.basis1[1], std, low=Individual.min_angle_offset, high=np.pi - Individual.min_angle_offset)
+        return child
 
     @staticmethod
     def mutate_code(child, strength):
