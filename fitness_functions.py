@@ -606,7 +606,7 @@ def mem_capacity_fitness(pop, gen, outdir, n_delays=10, t_start=None, **kwargs):
     def fit_func(ds):
         delays = np.arange(0, n_delays + 1)
         spp = int(ds.params["spp"])
-        t = slice(t_start * spp - 1, None, spp)
+        t = slice(int(t_start * spp) - 1, None, spp)
         scores = do_mem_capacity(ds, delays, t=t)
         fitness_components = scores.mean(axis=-1)
         # print("MC", np.sum(fitness_components), len(ds))
