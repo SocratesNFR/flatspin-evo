@@ -597,13 +597,16 @@ def xor_fitness(pop, gen, outdir, quantity="spin", grid_size=None, crop_width=No
     return pop
 
 
-def mem_capacity_fitness(pop, gen, outdir, n_delays=10, **kwargs):
+def mem_capacity_fitness(pop, gen, outdir, n_delays=10, t_start=None, **kwargs):
     from mem_capacity import do_mem_capacity
+
+    if t_start is None:
+        t_start = 0.1 * len(kwargs["input"]) + 1
 
     def fit_func(ds):
         delays = np.arange(0, n_delays + 1)
         spp = int(ds.params["spp"])
-        t = slice(spp - 1, None, spp)
+        t = slice(t_start * spp - 1, None, spp)
         scores = do_mem_capacity(ds, delays, t=t)
         fitness_components = scores.mean(axis=-1)
         # print("MC", np.sum(fitness_components), len(ds))
