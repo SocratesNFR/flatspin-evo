@@ -19,11 +19,15 @@ class Individual(Base_Individual):
     basis_max = 1.3
     min_angle_offset = np.deg2rad(10)
 
-    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, **kwargs):
+    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, max_holes=None, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, **kwargs):
         self.gen = gen
         self.pheno_bounds = pheno_bounds
         self.code_len = code_len
 
+        if max_holes is None:
+            self.max_holes = code_len - 1
+        else:
+            self.max_holes = min(max_holes, code_len - 1)
         self.id = next(self._id_counter) if id is None else id
 
         self.basis0 = basis0 if basis0 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, np.random.rand() * np.pi))
@@ -32,7 +36,7 @@ class Individual(Base_Individual):
         self.code = code if code is not None else np.random.rand(code_len)
         if angle_array is None:
             self.angle_array = [np.random.rand() * np.pi * 2 for _ in range(code_len)]
-            dropout = [1] + [((np.random.rand() < 0.7) * 2 - 1) for _ in range(code_len - 1)]
+            dropout = [((np.random.rand() < 0.7) * 2 - 1) for _ in range(max_holes)] + [1] * (code_len - max_holes)
             np.random.shuffle(dropout)
             self.angle_array = np.array([a * d for a, d in zip(self.angle_array, dropout)])
         else:
@@ -177,12 +181,9 @@ class Individual(Base_Individual):
             Individual.swap_mutation(child.angle_array)
         else:
             indexs = list(range(len(child.angle_array)))
-            positive = np.nonzero(child.angle_array >= 0)[0]
-            if len(positive) == 1:
-                indexs.remove(positive[0])
-            if len(indexs) == 0:
-                return
-            i = np.random.choice(indexs)
+            negative = np.nonzero(child.angle_array < 0)[0]
+
+            i = np.random.choice(indexs) if len(negative) < child.max_holes else np.random.choice(negative)  # choose negative angle if at max holes
             child.angle_array[i] = -1 if child.angle_array[i] >= 0 else np.random.rand() * np.pi * 2
 
 # ======= Crossover helpers =======================================================
