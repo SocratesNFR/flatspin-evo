@@ -401,6 +401,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             improve_rate = improvement_rate(mut_kids, dataset, minimize_fitness)
             if improve_rate >= 0:
                 new_mut_strength = (mut_strength + mutate_strategy) if improve_rate > 0.2 else (mut_strength - mutate_strategy)
+                new_mut_strength = np.round(new_mut_strength, 3)
                 if new_mut_strength > 0:
                     print(f"improvment rate: {improve_rate}, updating mut_strength {mut_strength} -> {new_mut_strength}")
                     mut_strength = new_mut_strength
