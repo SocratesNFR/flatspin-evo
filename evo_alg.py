@@ -395,10 +395,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             if improve_rate >= 0:
                 new_mut_strength = (mut_strength + mutate_strategy) if improve_rate > 0.2 else (mut_strength - mutate_strategy)
                 if new_mut_strength > 0:
-                    print(f"improment rate: {improve_rate}, updating mut_strength {mut_strength} -> {new_mut_strength}")
+                    print(f"improvment rate: {improve_rate}, updating mut_strength {mut_strength} -> {new_mut_strength}")
                     mut_strength = new_mut_strength
                 else:
-                    print(f"improment rate: {improve_rate}, mut_strength is already at minimum ({mut_strength})")
+                    print(f"improvment rate: {improve_rate}, mut_strength is already at minimum ({mut_strength})")
         # Select
         print("    Select")
         if select == "best":
