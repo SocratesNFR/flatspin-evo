@@ -177,7 +177,7 @@ class Individual(Base_Individual):
         if rand < 0.4:
             std = strength * 0.05
             child.angle_array = Individual.gaussian_mutation(child.angle_array, std=std, low=0, high=np.pi * 2, ignore_negative=True)
-        elif rand < 0.8:
+        elif rand < 0.8 or child.max_holes == 0:
             Individual.swap_mutation(child.angle_array)
         else:
             indexs = list(range(len(child.angle_array)))
