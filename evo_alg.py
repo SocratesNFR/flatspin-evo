@@ -211,7 +211,10 @@ def improvement_rate(mutant_pop, dataset, minimize_fitness=True):
         return -1
     ds = dataset.index.drop_duplicates(subset=['indv_id'])
     kid_fit = [indv.fitness for indv in mutant_pop]
-    parent_fit = [ds[ds['indv_id'] == indv.parent_ids[0]]['fitness'].values[0] for indv in mutant_pop]
+    try:
+        parent_fit = [ds[ds['indv_id'] == indv.parent_ids[0]]['fitness'].values[0] for indv in mutant_pop]
+    except IndexError:
+        print(f" parent_id = {indv.parent_ids[0]} not found in dataset")
     better = [kf <= pf if minimize_fitness else kf >= pf for kf, pf in zip(kid_fit, parent_fit) if not np.isnan(kf) and not np.isnan(pf)]
     if len(better) < 1:
         return -1
