@@ -41,7 +41,7 @@ class Individual(Base_Individual):
         self.code = code if code is not None else np.random.rand(code_len)
         if angle_array is None:
             self.angle_array = [np.random.rand() * np.pi * 2 for _ in range(code_len)]
-            dropout = [((np.random.rand() < 0.7) * 2 - 1) for _ in range(max_holes)] + [1] * (code_len - max_holes)
+            dropout = [((np.random.rand() < 0.7) * 2 - 1) for _ in range(self.max_holes)] + [1] * (code_len - self.max_holes)
             np.random.shuffle(dropout)
             self.angle_array = np.array([a * d for a, d in zip(self.angle_array, dropout)])
         else:
