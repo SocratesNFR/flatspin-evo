@@ -55,7 +55,7 @@ class Individual(Base_Individual):
 
     def __init__(self, *, max_tiles=1, tile_size=600, mag_w=220, mag_h=80, max_symbol=1, pheno_size=40,
                  pheno_bounds=None, age=0, id=None, gen=0, fitness=None, fitness_components=None, fitness_info=None,
-                 tiles=None, init_pheno=True, fixed_geom=False, **kwargs):
+                 tiles=None, init_pheno=True, fixed_geom=False, parent_ids=None, **kwargs):
 
         self.id = id if id is not None else next(Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -73,6 +73,11 @@ class Individual(Base_Individual):
         self.fitness = fitness
         self.fitness_components = fitness_components
         self.fitness_info = fitness_info
+
+        if parent_ids is None:
+            self.parent_ids = []
+        else:
+            self.parent_ids = parent_ids
 
         self.init_evolved_params(**kwargs)
         if not self.fixed_geom:
@@ -272,7 +277,7 @@ class Individual(Base_Individual):
 
     def mutate(self, strength=1):
         """mutate an Individual to produce children, return any children  as a list"""
-        clone = self.copy(refresh=False)
+        clone = self.copy(refresh=False, parent_ids=[self.id])
         mut_types = []  # valid mutations for individual
 
         if not clone.fixed_geom:
@@ -344,7 +349,7 @@ class Individual(Base_Individual):
             logging.info(
                 f"Failed crossover: {cx_name} {evo_params_info}with parents {[parents[0].id, parents[1].id]}"
             )
-
+        child.parent_ids = [self.id, other.id]
         return [child] if child else []
 
     @staticmethod

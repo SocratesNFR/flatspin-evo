@@ -206,6 +206,18 @@ def save_snapshot(outdir, pop):
         pkl.dump([repr(indv) for indv in pop], f)
 
 
+def improvement_rate(mutant_pop, dataset, minimize_fitness=True):
+    if len(mutant_pop) < 1:
+        return -1
+    ds = dataset.index.drop_duplicates(subset=['indv_id'])
+    kid_fit = [indv.fitness for indv in mutant_pop]
+    parent_fit = [ds[ds['indv_id'] == indv.parent_ids[0]]['fitness'].values[0] for indv in mutant_pop]
+    better = [kf <= pf if minimize_fitness else kf >= pf for kf, pf in zip(kid_fit, parent_fit) if not np.isnan(kf) and not np.isnan(pf)]
+    if len(better) < 1:
+        return -1
+    return sum(better) / len(better)
+
+
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
         *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None,
         keep_id=False, **kwargs):
@@ -308,7 +320,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, select="best", **kwargs):
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_stratergy=0, **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -349,35 +361,44 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
         # Mutate!
         print("    Mutate")
-        new_kids = []
+        mut_kids = []
         for indv in pop:
             if np.random.rand() < mut_prob:
-                new_kids += indv.mutate(mut_strength)
-
+                mut_kids += indv.mutate(mut_strength)
+        crossover_kids = []
         # Crossover!
         print("    Crossover")
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
             if np.random.rand() < cx_prob:
                 partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
-                new_kids += indv.crossover(partner)
+                crossover_kids += indv.crossover(partner)
 
-        for indv in new_kids:
+        for indv in mut_kids + crossover_kids:
             indv.gen = gen
 
         # Eval
         print("    Evaluate")
         if reval_inner:  # do we re-evealuate all inner fitnesses?
-            pop.extend(new_kids)
+            pop.extend(mut_kids + crossover_kids)
             list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
             evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         else:
-            evaluate_inner(new_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
-            pop.extend(new_kids)
+            evaluate_inner(mut_kids + crossover_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
+            pop.extend(mut_kids + crossover_kids)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
 
         update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
         dataset.save()
 
+        if mutate_stratergy and len(mut_kids) > 0:
+            improve_rate = improvement_rate(mut_kids, dataset, minimize_fitness)
+            if improve_rate >= 0:
+                new_mut_strength = (mut_strength + mutate_stratergy) if improve_rate > 0.2 else (mut_strength - mutate_stratergy)
+                if new_mut_strength > 0:
+                    print(f"improment rate: {improve_rate}, updating mut_strength {mut_strength} -> {new_mut_strength}")
+                    mut_strength = new_mut_strength
+                else:
+                    print(f"improment rate: {improve_rate}, mut_strength is already at minimum ({mut_strength})")
         # Select
         print("    Select")
         if select == "best":

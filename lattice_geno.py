@@ -19,10 +19,15 @@ class Individual(Base_Individual):
     basis_max = 1.3
     min_angle_offset = np.deg2rad(10)
 
-    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, max_holes=None, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, **kwargs):
+    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, max_holes=None, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, parent_ids=None, **kwargs):
         self.gen = gen
         self.pheno_bounds = pheno_bounds
         self.code_len = code_len
+
+        if parent_ids is None:
+            self.parent_ids = []
+        else:
+            self.parent_ids = parent_ids
 
         if max_holes is None:
             self.max_holes = code_len - 1
@@ -202,7 +207,7 @@ class Individual(Base_Individual):
 # ===================================================================================
 
     def mutate(self, strength=1):
-        child = self.copy()
+        child = self.copy(parent_ids=[self.id])
         mutations = [Individual.mutate_bases, Individual.mutate_code, Individual.mutate_angle_array]
         weights = [1] * len(mutations)
         if len(self.evolved_params_values) > 0:
@@ -214,7 +219,7 @@ class Individual(Base_Individual):
         return [child]
 
     def crossover(self, other):
-        child = self.copy()
+        child = self.copy(parent_ids=[self.id, other.id])
         Individual.crossover_bases(child, other)
         Individual.crossover_code_and_angle_array(child, other)
         child.evolved_params_values = Individual.crossover_evo_params([child, other])

@@ -11,6 +11,7 @@ numeric = Union[int, float, np.number]
 class Base_Individual(ABC):
     id: int
     gen: int
+    parent_ids: List[int]
     fitness: numeric
     fitness_components: List[numeric]
     fitness_info: List
