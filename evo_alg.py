@@ -320,7 +320,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_stratergy=0, **kwargs):
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -390,10 +390,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
         dataset.save()
 
-        if mutate_stratergy and len(mut_kids) > 0:
+        if mutate_strategy and len(mut_kids) > 0:
             improve_rate = improvement_rate(mut_kids, dataset, minimize_fitness)
             if improve_rate >= 0:
-                new_mut_strength = (mut_strength + mutate_stratergy) if improve_rate > 0.2 else (mut_strength - mutate_stratergy)
+                new_mut_strength = (mut_strength + mutate_strategy) if improve_rate > 0.2 else (mut_strength - mutate_strategy)
                 if new_mut_strength > 0:
                     print(f"improment rate: {improve_rate}, updating mut_strength {mut_strength} -> {new_mut_strength}")
                     mut_strength = new_mut_strength
