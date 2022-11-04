@@ -162,7 +162,7 @@ def save_stats(outdir, pop, minimize_fitness):
 
 
 def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
-    # pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
+    pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
 
     if len(pop) < 1:
         return
@@ -211,7 +211,13 @@ def improvement_rate(mutant_pop, dataset, minimize_fitness=True):
         return -1
     ds = dataset.index.drop_duplicates(subset=['indv_id'])
     kid_fit = [indv.fitness for indv in mutant_pop]
-    parent_fit = [ds[ds['indv_id'] == indv.parent_ids[0]]['fitness'].values[0] for indv in mutant_pop]
+    parent_fit = []
+
+    for indv in mutant_pop:
+        if indv.parent_ids[0] in ds["indv_id"].values:
+            parent_fit.append(ds[ds["indv_id"] == indv.parent_ids[0]]["fitness"].values[0])
+        else:
+            parent_fit.append(np.nan)
 
     better = [kf <= pf if minimize_fitness else kf >= pf for kf, pf in zip(kid_fit, parent_fit) if not np.isnan(kf) and not np.isnan(pf)]
     if len(better) < 1:
