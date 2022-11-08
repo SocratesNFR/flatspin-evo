@@ -327,7 +327,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, **kwargs):
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True, **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -358,6 +358,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         dataset.save()
 
     gen_times = []
+    best = None
     for gen in range(starting_gen, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
         if len(gen_times) > 0:
@@ -366,12 +367,14 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
                 f"~{np.round(tr / 60, 2)} minutes remaining" if tr > 60 else f"~{np.round(tr, 2)} seconds remaining"))
         time = datetime.now()
 
+        parent_list = []  # track parents in case we want to remove them
         # Mutate!
         print("    Mutate")
         mut_kids = []
         for indv in pop:
             if np.random.rand() < mut_prob:
                 mut_kids += indv.mutate(mut_strength)
+                parent_list.append(indv)
         crossover_kids = []
         # Crossover!
         print("    Crossover")
@@ -379,6 +382,16 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             if np.random.rand() < cx_prob:
                 partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
                 crossover_kids += indv.crossover(partner)
+                parent_list.extend([indv, partner])
+
+        if not keep_parents:
+            for parent in parent_list:
+                try:
+                    pop.remove(parent)
+                except ValueError:
+                    pass
+            if elitism and best and best not in pop:
+                pop.append(best)
 
         for indv in mut_kids + crossover_kids:
             indv.gen = gen
