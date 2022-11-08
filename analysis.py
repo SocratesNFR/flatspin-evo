@@ -20,7 +20,8 @@ def family_tree(ind_id, logfile, max_depth=float("inf"), **kwargs):
 
 def build_family_net(ind_id, log, max_depth=float("inf"), g=None):
     g = g if g else nx.DiGraph()
-    if max_depth == 0: return g
+    if max_depth == 0:
+        return g
     g.add_node(ind_id)
     parents = get_parents(ind_id, log)  # TODO: speed up only search for parents above the current in the log
     for parent in parents:
@@ -56,7 +57,8 @@ def plot_tree(g, width=10, height=10, with_labels=True, **kwargs):
     class defaultview(object):
         w, h = width, height
 
-    for v in grn.C[0].sV: v.view = defaultview()
+    for v in grn.C[0].sV:
+        v.view = defaultview()
 
     sug = SugiyamaLayout(grn.C[0])
     sug.init_all()  # roots=[V[0]])
@@ -80,7 +82,8 @@ def mutation_stats(logfile, indexfile):
     _get_fit = lru_cache()(lambda id: get_fitness(id, index))
 
     for line in log.splitlines():
-        if not line.startswith(prefix): continue
+        if not line.startswith(prefix):
+            continue
         failed, ind, action, parents, info = parse_log_line(line)
         if failed:
             if action in fail:
@@ -202,6 +205,14 @@ def get_fitness(indv_id, index):
     return indv.iloc[0]["fitness"] if len(indv) > 0 else "not found"
 
 
+def plot_scatter(indexfile, **kwargs):
+    plt.style.use("dark_background")
+    index = read_csv(indexfile)
+    plt.scatter(y=index["indv_id"], x=index["gen"], c=index["fitness"], cmap="rainbow", alpha=0.5, **kwargs)
+    plt.colorbar()
+    plt.show()
+
+
 if __name__ == '__main__':
     import argparse
     import os
@@ -210,7 +221,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
 
     # common
-    parser.add_argument('action', metavar="action", choices=["mut-pie", "family-tree", "diversity"],
+    parser.add_argument('action', metavar="action", choices=["mut-pie", "family-tree", "diversity", "scatter"],
                         help="[mut-pie/family-tree/diversity]")
     parser.add_argument('-l', '--log', metavar='FILE', default="evo.log",
                         help=r'name of log')
@@ -234,5 +245,7 @@ if __name__ == '__main__':
             raise Exception("parameter ind_id must be supplied for action 'family-tree'")
         ind_id = args.param.pop("ind_id")
         family_tree(ind_id, log, **args.param)
+    elif args.action == "scatter":
+        plot_scatter(index, **args.param)
     else:
         raise Exception(f"Unknown action: '{args.action}'")

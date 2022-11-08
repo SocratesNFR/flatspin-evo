@@ -105,7 +105,7 @@ def tournament_select(pop, pop_size, tournament_size=7, elitism=False, minimize_
         new_pop.append(best)
         pop.remove(best)
 
-    for _ in range(pop_size):
+    for _ in range(pop_size - len(new_pop)):
         if len(pop) < tournament_size:
             if len(pop) == 0:
                 break
