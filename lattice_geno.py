@@ -194,16 +194,33 @@ class Individual(Base_Individual):
 # ======= Crossover helpers =======================================================
 
     @staticmethod
-    def crossover_bases(child, parent2):
-        child.basis0 = (child.basis0, parent2.basis0)[np.random.randint(2)]
-        child.basis1 = (child.basis1, parent2.basis1)[np.random.randint(2)]
+    def crossover_bases(child1, child2, parent2):
+        if np.random.rand() < 0.5:
+            child1.basis0 = parent2.basis0
+        else:
+            child2.basis0 = parent2.basis0
+        if np.random.rand() < 0.5:
+            child1.basis1 = parent2.basis1
+        else:
+            child2.basis1 = parent2.basis1
 
     @staticmethod
-    def crossover_code_and_angle_array(child, parent2):
-        for i in range(len(child.code)):
+    def crossover_code_and_angle_array(child1, child2, parent2):
+        for i in range(len(child1.code)):
             if np.random.rand() < 0.5:
-                child.code[i] = parent2.code[i]
-                child.angle_array[i] = parent2.angle_array[i]
+                child1.code[i] = parent2.code[i]
+                child1.angle_array[i] = parent2.angle_array[i]
+            else:
+                child2.code[i] = parent2.code[i]
+                child2.angle_array[i] = parent2.angle_array[i]
+
+    @staticmethod
+    def crossover_evo_params(child1, child2, parent2):
+        for param, rnd in zip(parent2._evolved_params, np.random.random(len(parent2._evolved_params))):
+            if rnd > 0.5:
+                child1.evolved_params_values[param] = deepcopy(parent2.evolved_params_values[param])
+            else:
+                child2.evolved_params_values[param] = deepcopy(parent2.evolved_params_values[param])
 # ===================================================================================
 
     def mutate(self, strength=1):
@@ -219,11 +236,12 @@ class Individual(Base_Individual):
         return [child]
 
     def crossover(self, other):
-        child = self.copy(parent_ids=[self.id, other.id])
-        Individual.crossover_bases(child, other)
-        Individual.crossover_code_and_angle_array(child, other)
-        child.evolved_params_values = Individual.crossover_evo_params([child, other])
-        return [child]
+        child1 = self.copy(parent_ids=[self.id, other.id])
+        child2 = self.copy(parent_ids=[self.id, other.id])
+        Individual.crossover_bases(child1, child2, other)
+        Individual.crossover_code_and_angle_array(child1, child2, other)
+        Individual.crossover_evo_params(child1, child2, other)
+        return [child1, child2]
 
     def from_string(string, **overide_kwargs):
         array = np.array

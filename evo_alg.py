@@ -381,8 +381,12 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
             if np.random.rand() < cx_prob:
                 partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
-                crossover_kids += indv.crossover(partner)
-                parent_list.extend([indv, partner])
+                cross_result = indv.crossover(partner)
+                crossover_kids += cross_result
+                if len(cross_result) > 1:
+                    parent_list += [indv, partner]
+                else:
+                    parent_list.append(indv if indv.fitness < partner.fitness else partner)  # if only add one kid, add the better parent so pop size is maintained
 
         if not keep_parents:
             for parent in parent_list:
