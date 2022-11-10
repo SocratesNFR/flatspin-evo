@@ -19,33 +19,40 @@ class Individual(Base_Individual):
     basis_max = 1.3
     min_angle_offset = np.deg2rad(10)
 
-    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, code=None, code_len=10, max_holes=None, angle_array=None, pheno_bounds=(25, 25), pos=None, angle=None, parent_ids=None, **kwargs):
+    def __init__(self, *, basis0=None, basis1=None, id=None, gen=0, angle_tile=None, angle_tile_shape=(3, 3), max_holes=None, angle_table=None,
+                 num_angles=None, lattice_shape=(10, 10), pos=None, angle=None, parent_ids=None, **kwargs):
         self.gen = gen
-        self.pheno_bounds = pheno_bounds
-        self.code_len = code_len
+        self.lattice_shape = lattice_shape
 
         if parent_ids is None:
             self.parent_ids = []
         else:
             self.parent_ids = parent_ids
 
-        if max_holes is None:
-            self.max_holes = code_len - 1
-        else:
-            self.max_holes = min(max_holes, code_len - 1)
         self.id = next(self._id_counter) if id is None else id
 
         self.basis0 = basis0 if basis0 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, np.random.rand() * np.pi))
         self.basis1 = basis1 if basis1 is not None else np.array((np.random.rand() * (Individual.basis_max - Individual.basis_min) + Individual.basis_min, np.random.rand() * (np.pi - 2 * Individual.min_angle_offset) + Individual.min_angle_offset))
 
-        self.code = code if code is not None else np.random.rand(code_len)
-        if angle_array is None:
-            self.angle_array = [np.random.rand() * np.pi * 2 for _ in range(code_len)]
-            dropout = [((np.random.rand() < 0.7) * 2 - 1) for _ in range(self.max_holes)] + [1] * (code_len - self.max_holes)
-            np.random.shuffle(dropout)
-            self.angle_array = np.array([a * d for a, d in zip(self.angle_array, dropout)])
+        if angle_tile is not None:
+            self.angle_tile_shape = angle_tile.shape
         else:
-            self.angle_array = angle_array
+            self.angle_tile_shape = angle_tile_shape
+
+        self.num_angles = num_angles if num_angles is not None else np.prod(angle_tile_shape)
+        self.angle_tile = angle_tile if angle_tile is not None else np.random.randint(0, self.num_angles, size=self.angle_tile_shape)
+        if max_holes is None:
+            self.max_holes = self.num_angles - 1
+        else:
+            self.max_holes = max_holes
+
+        if angle_table is None:
+            self.angle_table = [np.random.rand() * np.pi * 2 for _ in range(self.num_angles)]
+            dropout = [((np.random.rand() < 0.7) * 2 - 1) for _ in range(self.max_holes)] + [1] * (self.num_angles - self.max_holes)
+            np.random.shuffle(dropout)
+            self.angle_table = np.array([a * d for a, d in zip(self.angle_table, dropout)])
+        else:
+            self.angle_table = angle_table
 
         if pos is None or angle is None:
             self.pos, self.angle = self.geno2pheno()
@@ -61,34 +68,14 @@ class Individual(Base_Individual):
     def is_in_bounds(self, point):
         return 0 <= point[0] <= self.pheno_bounds[0] and 0 <= point[1] <= self.pheno_bounds[1]
 
-    def perm_from_sort(self):
-        perm = np.argsort(self.code)
-        inv_perm = [np.where(perm == i)[0][0] for i in range(len(perm))]
-        return perm, inv_perm
-
-    def geno2pheno(self, pheno_bounds=None):
-        if pheno_bounds is None:
-            pheno_bounds = self.pheno_bounds
-
-        # pos = np.array([x * self.basis0 + y * self.basis1 for x in range(pheno_bounds[0]) for y in range(pheno_bounds[1])])
-        # angle = np.array([self.code[0] * x * np.pi + self.code[1] * y * np.pi for x in range(pheno_bounds[0]) for y in range(pheno_bounds[1])])
-
-        frontier = [(0.0, 0.0)]
-        symbol_frontier = [0]
-
-        pos = []
-        symbols = []
-
-        seen = set(frontier)
-        angle = []
-        i = 0
-        perm, inv_perm = self.perm_from_sort()
+    def geno2pheno(self, lattice_shape=None):
+        if lattice_shape is None:
+            lattice_shape = self.lattice_shape
 
         # calculate basis from magnitude and angle
         basis0 = (self.basis0[0] * np.array((np.cos(self.basis0[1]), np.sin(self.basis0[1]))))
         b1_angle = self.basis1[1] + self.basis0[1]
         basis1 = (self.basis1[0] * np.array((np.cos(b1_angle), np.sin(b1_angle))))
-
         # find min magnitude
         min_magn = min([np.linalg.norm(basis0), np.linalg.norm(basis1)])
 
@@ -96,27 +83,9 @@ class Individual(Base_Individual):
         scaled_basis0 = basis0 / min_magn
         scaled_basis1 = basis1 / min_magn
 
-        while frontier:
-            point = frontier.pop()
-            symbol = symbol_frontier.pop()
-            new_pos = [tuple(np.round((point[0] + sign * b[0], point[1] + sign * b[1]), 5)) for b in (scaled_basis0, scaled_basis1) for sign in (-1, 1)]
-
-            # new_sym = [(perm if basis == 0 else inv_perm)[symbol if sign == 1 else -1 - symbol] for basis in (0, 1) for sign in (-1, 1)]
-            # new_sym = [(perm if basis * sign > 0 else inv_perm)[symbol] for basis in (1, -1) for sign in (1, -1)]
-            # new_sym = [(perm if basis == 0 else inv_perm)[symbol] for basis in (0, 1) for sign in (-1, 1)]
-            new_sym = [(basis * 2 - 1 + symbol) % self.code_len for basis in (0, 1) for sign in (-1, 1)]
-
-            new_pos, new_sym = list(zip(*[(p, s) for p, s in zip(new_pos, new_sym) if self.is_in_bounds(p) and p not in seen])) or [[], []]
-
-            frontier.extend(new_pos)
-            symbol_frontier.extend(new_sym)
-
-            seen.update(new_pos)
-            pos.append(point)
-            symbols.append(symbol)
-            i += 1
-
-        angle = [self.angle_array[s] for s in symbols]
+        grid = np.array(np.meshgrid(np.arange(lattice_shape[0]), np.arange(lattice_shape[1]))).T.reshape(-1, 2)
+        pos = np.dot(grid, np.array([scaled_basis0, scaled_basis1]))
+        angle = self.angle_table[self.angle_tile[np.mod(grid[:, 0], self.angle_tile_shape[0]), np.mod(grid[:, 1], self.angle_tile_shape[1])]]
 
         # remove negative angles
         pos, angle = list(zip(*[(p, a) for p, a in zip(pos, angle) if a >= 0])) or [[], []]
@@ -177,19 +146,19 @@ class Individual(Base_Individual):
             Individual.swap_mutation(child.code)
 
     @staticmethod
-    def mutate_angle_array(child, strength):
+    def mutate_angle_table(child, strength):
         rand = np.random.rand()
         if rand < 0.4:
             std = strength * 0.05
-            child.angle_array = Individual.gaussian_mutation(child.angle_array, std=std, low=0, high=np.pi * 2, ignore_negative=True)
+            child.angle_table = Individual.gaussian_mutation(child.angle_table, std=std, low=0, high=np.pi * 2, ignore_negative=True)
         elif rand < 0.8 or child.max_holes == 0:
-            Individual.swap_mutation(child.angle_array)
+            Individual.swap_mutation(child.angle_table)
         else:
-            indexs = list(range(len(child.angle_array)))
-            negative = np.nonzero(child.angle_array < 0)[0]
+            indexs = list(range(len(child.angle_table)))
+            negative = np.nonzero(child.angle_table < 0)[0]
 
             i = np.random.choice(indexs) if len(negative) < child.max_holes else np.random.choice(negative)  # choose negative angle if at max holes
-            child.angle_array[i] = -1 if child.angle_array[i] >= 0 else np.random.rand() * np.pi * 2
+            child.angle_table[i] = -1 if child.angle_table[i] >= 0 else np.random.rand() * np.pi * 2
 
 # ======= Crossover helpers =======================================================
 
@@ -205,14 +174,14 @@ class Individual(Base_Individual):
             child2.basis1 = parent2.basis1
 
     @staticmethod
-    def crossover_code_and_angle_array(child1, child2, parent2):
+    def crossover_code_and_angle_table(child1, child2, parent2):
         for i in range(len(child1.code)):
             if np.random.rand() < 0.5:
                 child1.code[i] = parent2.code[i]
-                child1.angle_array[i] = parent2.angle_array[i]
+                child1.angle_table[i] = parent2.angle_table[i]
             else:
                 child2.code[i] = parent2.code[i]
-                child2.angle_array[i] = parent2.angle_array[i]
+                child2.angle_table[i] = parent2.angle_table[i]
 
     @staticmethod
     def crossover_evo_params(child1, child2, parent2):
@@ -225,7 +194,7 @@ class Individual(Base_Individual):
 
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
-        mutations = [Individual.mutate_bases, Individual.mutate_code, Individual.mutate_angle_array]
+        mutations = [Individual.mutate_bases, Individual.mutate_code, Individual.mutate_angle_table]
         weights = [1] * len(mutations)
         if len(self.evolved_params_values) > 0:
             mutations += [Individual.mutate_evo_param]
@@ -239,7 +208,7 @@ class Individual(Base_Individual):
         child1 = self.copy(parent_ids=[self.id, other.id])
         child2 = self.copy(parent_ids=[self.id, other.id])
         Individual.crossover_bases(child1, child2, other)
-        Individual.crossover_code_and_angle_array(child1, child2, other)
+        Individual.crossover_code_and_angle_table(child1, child2, other)
         Individual.crossover_evo_params(child1, child2, other)
         return [child1, child2]
 
