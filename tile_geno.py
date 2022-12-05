@@ -622,7 +622,7 @@ class Individual(Base_Individual):
             def condition(ind):
                 return len(ind.coords) >= ind.pheno_size
 
-        return Individual.super().get_default_run_params(pop, sweep_list, condition=condition)
+        return super(Individual).get_default_run_params(pop, sweep_list, condition=condition)
 
 
 class Tile(Sequence):
