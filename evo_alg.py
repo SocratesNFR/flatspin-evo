@@ -272,7 +272,7 @@ def parse_starting_pop(starting_pop, individual_class):
             starting_pop = f.read().splitlines()
     except Exception:
         pass
-    pop = [individual_class.from_string(i, id=None, gen=0) for i in starting_pop]
+    pop = [individual_class.from_string(i, id=None, gen=0, keep_pheno=True) for i in starting_pop]
     return pop
 
 
@@ -322,6 +322,18 @@ def setup_evolved_params(evolved_params, individual_class):
     individual_class.set_evolved_params(evolved_params)
 
 
+def crossover(pop, cx_prob):
+    parent_list, kids_list = [], []
+    for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
+        if np.random.rand() < cx_prob:
+            partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
+            cross_result = indv.crossover(partner)
+            parent_list.append([indv, partner])
+            kids_list.append(cross_result)
+    return parent_list, kids_list
+
+
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
@@ -350,9 +362,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         evaluate_outer(pop, basepath=outdir, gen=0, **outer_eval_params)
         # create superdataset
         index = pd.DataFrame()
-        params = None  # to be added by update_superdataset
         info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
-        dataset = Dataset(index, params, info, basepath=outdir)
+        dataset = Dataset(index, None, info, basepath=outdir)
 
         update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
         dataset.save()
@@ -378,15 +389,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         crossover_kids = []
         # Crossover!
         print("    Crossover")
-        for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
-            if np.random.rand() < cx_prob:
-                partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
-                cross_result = indv.crossover(partner)
-                crossover_kids += cross_result
-                if len(cross_result) > 1:
-                    parent_list += [indv, partner]
-                else:
-                    parent_list.append(indv if indv.fitness < partner.fitness else partner)  # if only add one kid, add the better parent so pop size is maintained
+        parent_list, cross_kids_list = crossover(pop, cx_prob, parent_list, crossover_kids)
+
 
         if not keep_parents:
             for parent in parent_list:

@@ -162,7 +162,10 @@ class Individual(Base_Individual):
         if not params.get("fixed_geom", False):
             # Instanciate Magnets from result of repr
             params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
-        return Individual(**params)
+        indv = Individual(init_pheno=not keep_pheno, **params)
+        if keep_pheno:
+            indv.pheno = [Magnet(**mag) for mag in params["pheno"]]
+        return indv
 
     def geno2pheno(self, geom_size=40, animate=False, no_change_terminator=1, **animation_kwargs):
         frontier, frozen = [], []
@@ -572,6 +575,7 @@ class Individual(Base_Individual):
             coords = geom.iloc[slice(0, num_of_magnets)][["posx", "posy"]].values
             angles = geom.iloc[slice(0, num_of_magnets)]["angle"].values
             indv.pheno = [Magnet(0, pos, angle, mag_w, mag_h, created, padding) for pos, angle in zip(coords, angles)]
+            print(len(indv.pheno))
             individuals.append(indv)
 
         return individuals
