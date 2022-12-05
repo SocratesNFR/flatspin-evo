@@ -163,7 +163,7 @@ class Individual(Base_Individual):
             # Instanciate Magnets from result of repr
             params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
         indv = Individual(init_pheno=not keep_pheno, **params)
-        if keep_pheno:
+        if keep_pheno and "pheno" in params:
             indv.pheno = [Magnet(**mag) for mag in params["pheno"]]
         return indv
 
