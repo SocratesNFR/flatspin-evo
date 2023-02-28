@@ -138,12 +138,15 @@ class Individual(Base_Individual):
         return child
 
     @staticmethod
-    def mutate_code(child, strength):
+    def mutate_angle_tile(child, strength):
+        #np.random.randint(0, self.num_angles, size=self.angle_tile_shape)
+        i = np.random.randint(0, np.prod(child.angle_tile_shape))
         if np.random.rand() < 0.5:
-            std = strength * 0.05
-            child.code = Individual.gaussian_mutation(child.code, std=std, low=0, high=1)
+            child.angle_tile.flat[i] = np.random.randint(0, child.num_angles)
         else:
-            Individual.swap_mutation(child.code)
+            j = np.random.choice([k for k in range(np.prod(child.angle_tile_shape)) if k != i])
+            child.angle_tile.flat[i], child.angle_tile.flat[j] = child.angle_tile.flat[j], child.angle_tile.flat[i]
+
 
     @staticmethod
     def mutate_angle_table(child, strength):
@@ -194,7 +197,7 @@ class Individual(Base_Individual):
 
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
-        mutations = [Individual.mutate_bases, Individual.mutate_code, Individual.mutate_angle_table]
+        mutations = [Individual.mutate_bases, Individual.mutate_angle_tile, Individual.mutate_angle_table]
         weights = [1] * len(mutations)
         if len(self.evolved_params_values) > 0:
             mutations += [Individual.mutate_evo_param]
