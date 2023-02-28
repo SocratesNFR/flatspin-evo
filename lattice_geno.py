@@ -177,13 +177,13 @@ class Individual(Base_Individual):
             child2.basis1 = parent2.basis1
 
     @staticmethod
-    def crossover_code_and_angle_table(child1, child2, parent2):
-        for i in range(len(child1.code)):
+    def crossover_angle_tile_table(child1, child2, parent2):
+        for i in range(len(child1.angle_tile.flat)):
             if np.random.rand() < 0.5:
-                child1.code[i] = parent2.code[i]
+                child1.angle_tile.flat[i] = parent2.angle_tile.flat[i]
                 child1.angle_table[i] = parent2.angle_table[i]
             else:
-                child2.code[i] = parent2.code[i]
+                child2.angle_tile.flat[i] = parent2.angle_tile.flat[i]
                 child2.angle_table[i] = parent2.angle_table[i]
 
     @staticmethod
@@ -211,7 +211,7 @@ class Individual(Base_Individual):
         child1 = self.copy(parent_ids=[self.id, other.id])
         child2 = self.copy(parent_ids=[self.id, other.id])
         Individual.crossover_bases(child1, child2, other)
-        Individual.crossover_code_and_angle_table(child1, child2, other)
+        Individual.crossover_angle_tile_table(child1, child2, other)
         Individual.crossover_evo_params(child1, child2, other)
         return [child1, child2]
 

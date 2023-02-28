@@ -322,16 +322,16 @@ def setup_evolved_params(evolved_params, individual_class):
     individual_class.set_evolved_params(evolved_params)
 
 
-def crossover(pop, cx_prob):
-    parent_list, kids_list = [], []
+def crossover(pop, cx_prob, parent_list=None):
+    parent_list = parent_list if parent_list is not None else []
+    kids_list = []
     for i, indv in enumerate(pop):  # TODO: replace with itertools combination or likewise
         if np.random.rand() < cx_prob:
             partner = np.random.choice(pop)  # can partner with itself, resulting in perfect copy
             cross_result = indv.crossover(partner)
-            parent_list.append([indv, partner])
-            kids_list.append(cross_result)
+            parent_list.extend([indv, partner])
+            kids_list.extend(cross_result)
     return parent_list, kids_list
-
 
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
@@ -386,11 +386,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             if np.random.rand() < mut_prob:
                 mut_kids += indv.mutate(mut_strength)
                 parent_list.append(indv)
-        crossover_kids = []
+
         # Crossover!
         print("    Crossover")
-        parent_list, cross_kids_list = crossover(pop, cx_prob, parent_list, crossover_kids)
-
+        parent_list, crossover_kids = crossover(pop, cx_prob, parent_list)
 
         if not keep_parents:
             for parent in parent_list:
