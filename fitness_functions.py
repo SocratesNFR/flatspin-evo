@@ -477,7 +477,6 @@ def zipfness(x):
     zipfness = np.sum(np.abs(x_counts - target))
     return zipfness
 
-
 @lru_cache
 def zipf(n):
     "return zipf vector starting at 1"
