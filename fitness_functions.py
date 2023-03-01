@@ -101,7 +101,7 @@ def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=
                 except Exception as e:  # not done saving file
                     if shared_params.get("run", "local") != "dist" or group_by:
                         raise e
-                    if type(e) not in (FileNotFoundError):
+                    if type(e) not in (FileNotFoundError, ):
                         print(type(e), e)
                     queue.append(ds)  # queue.append((indv_id, ds))
                     sleep(2)
