@@ -208,7 +208,13 @@ def get_fitness(indv_id, index):
 def plot_scatter(indexfile, **kwargs):
     plt.style.use("dark_background")
     index = read_csv(indexfile)
-    plt.scatter(y=index["indv_id"], x=index["gen"], c=index["fitness"], cmap="rainbow", alpha=0.5, **kwargs)
+    best = index[index["best"] == 1]
+    not_best = index[index["best"] == 0]
+    v_min, v_max = index["fitness"].min(), index["fitness"].max()
+    plt.scatter(y=not_best["indv_id"], x=not_best["gen"], c=not_best["fitness"], cmap="rainbow", alpha=0.5, vmin=v_min,
+                vmax=v_max, **kwargs)
+    plt.scatter(y=best["indv_id"], x=best["gen"], c=best["fitness"], marker="*", cmap="rainbow", alpha=0.5, vmin=v_min,
+                vmax=v_max, **kwargs)
     plt.colorbar()
     plt.show()
 

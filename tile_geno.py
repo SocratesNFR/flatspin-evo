@@ -12,7 +12,7 @@ import warnings
 from flatspin import plotting
 from shapely.geometry import box, MultiPolygon
 from shapely.affinity import rotate, translate
-from shapely.prepared import prep
+from shapely    
 from itertools import count, permutations
 from functools import cached_property
 from copy import deepcopy, copy

@@ -1,5 +1,5 @@
 import numpy as np
-from flatspin.model import SpinIce
+from flatspin.model import SpinIce, CustomSpinIce
 from flatspin.encoder import Encoder, scale, grid, fixed_vector
 
 def spin2bin(spin):
@@ -9,8 +9,11 @@ def bin2spin(bin):
     return bin * 2 - 1
 
 class ShiftRegister(SpinIce):
-    def __init__(self, *, sw_b=1, sw_c=1, sw_beta=3, sw_gamma=3, neighbor_distance=np.inf,
-                 angle_b=-22, angle_d=22, angle_i=None, **kwargs):
+    def __init__(self, *, size=4, sw_b=1, sw_c=1, sw_beta=3, sw_gamma=3, neighbor_distance=np.inf,
+                 angle_b=-22, angle_d=22, angle_i=None,
+                 orientation='horizontal', direction=1,
+                 edge='symmetric', pitch_hor=1, pitch_ver=1, **kwargs):
+        kwargs['size'] = size
         kwargs['sw_b'] = sw_b
         kwargs['sw_c'] = sw_c
         kwargs['sw_beta'] = sw_beta
@@ -20,17 +23,34 @@ class ShiftRegister(SpinIce):
         self.angle_b = angle_b # angle of buffer magnets
         self.angle_d = angle_d # angle of data magnets
         self.angle_i = angle_i if angle_i is not None else angle_d # angle of input magnet
+        self.orientation = orientation
+        self.direction = direction
+        self.edge = edge
+        self.pitch_hor = pitch_hor
+        self.pitch_ver = pitch_ver
+        assert orientation in ('horizontal', 'vertical')
+        assert direction in (-1, 1)
+        assert edge in ('symmetric', 'asymmetric')
 
         super().__init__(**kwargs)
 
     def _init_geometry(self):
-        spin_count = 2 * self.size + 1
+        spin_count = 2 * self.size
+        if self.edge == 'symmetric':
+            spin_count += 1
 
         pos = np.zeros((spin_count, 2), dtype=float)
         angle = np.zeros(spin_count, dtype=float)
 
-        pos[:,0] = np.arange(spin_count)
-        pos[1::2,1] = 0.5 * np.sin(np.deg2rad(self.angle_d))
+        if self.orientation == 'horizontal':
+            pos[:,0] = self.direction * np.arange(spin_count)
+            pos[:,0] *= self.pitch_hor * np.cos(np.deg2rad(self.angle_d))
+            pos[1::2,1] = self.direction * self.pitch_hor * np.sin(np.deg2rad(self.angle_d))
+            if self.direction == -1:
+                pos[:,1] += self.pitch_hor * np.sin(np.deg2rad(self.angle_d))
+        else:
+            pos[:,1] = self.direction * np.arange(spin_count) * self.pitch_ver * np.cos(np.deg2rad(-self.angle_d))
+            pos[1::2,0] = self.direction * self.pitch_ver * np.sin(np.deg2rad(-self.angle_d))
         pos *= self.lattice_spacing
 
         angle[0::2] = np.deg2rad(self.angle_d)
@@ -120,3 +140,114 @@ class GlobalShiftRegEncoder(Encoder):
         super().__init__(**params)
 
     steps = (scale, fixed_vector, shift_cycle,)
+
+'''
+def make_ringbuf(width=4, height=4, angle_d = 22.5, angle_b = -22.5, **params):
+    kwargs = dict(
+        angle_d = angle_d,
+        angle_b = angle_b,
+        edge = 'asymmetric',
+        init = 1,
+    )
+
+    model_hlr = ShiftRegister(size=width, direction=1, **kwargs)
+    model_hrl = ShiftRegister(size=width, direction=-1, **kwargs)
+    model_vbt = ShiftRegister(size=height, orientation='vertical', direction= 1, pitch_ver=.8, **kwargs)
+    model_vtb = ShiftRegister(size=height, orientation='vertical', direction=-1, pitch_ver=.8, **kwargs)
+
+    pos_hlr = model_hlr.pos.copy()
+    angle_hlr = model_hlr.angle.copy()
+    pos_vbt = model_vbt.pos.copy()
+    angle_vbt = model_vbt.angle.copy()
+    pos_hrl = model_hrl.pos.copy()
+    angle_hrl = model_hrl.angle.copy()
+    pos_vtb = model_vtb.pos.copy()
+    angle_vtb = model_vtb.angle.copy()
+
+    pos = pos_hlr
+    angle = angle_hlr
+
+    pos_vbt[:,0] += np.max(pos_hlr[:,0]) - np.cos(np.deg2rad(90+model_hlr.angle_d))
+    pos_vbt[:,1] += np.max(pos_hlr[:,1]) + 1
+    pos = np.concatenate([pos, pos_vbt])
+    angle = np.concatenate([angle, angle_vbt])
+
+    pos_hrl[:,0] += np.max(pos_hlr[:,0]) - 1
+    pos_hrl[:,1] += np.max(pos[:,1])
+    pos = np.concatenate([pos, pos_hrl])
+    angle = np.concatenate([angle, angle_hrl])
+
+    pos_vtb[:,1] += np.max(np.abs(pos_vtb[:,1]))# - 1
+    pos_vtb[:,1] += np.max(pos_hlr[:,1])
+    pos_vtb[:,0] -= 1 - np.cos(np.deg2rad(90+model_hlr.angle_d))
+    pos = np.concatenate([pos, pos_vtb])
+    angle = np.concatenate([angle, angle_vtb])
+
+    params.setdefault('sw_b', 1)
+    params.setdefault('sw_c', 1)
+    params.setdefault('sw_beta', 3)
+    params.setdefault('sw_gamma', 3)
+
+    model = CustomSpinIce(magnet_coords=pos, magnet_angles=angle, radians=True, **params)
+
+    return model
+'''
+
+def make_ringbuf(width=4, height=4, angle_d = 22.5, angle_b = -22.5, pitch_hor=1, pitch_ver=1, **params):
+    kwargs = dict(
+        angle_d = angle_d,
+        angle_b = angle_b,
+        edge = 'asymmetric',
+        init = 1,
+    )
+
+    model_hlr = ShiftRegister(size=width, direction=1, pitch_hor=pitch_hor, 
+                              pitch_ver=pitch_ver, **kwargs)
+    model_hrl = ShiftRegister(size=width, direction=-1, pitch_hor=pitch_hor,
+                              pitch_ver=pitch_ver, **kwargs)
+    model_vbt = ShiftRegister(size=height, orientation='vertical', direction=1,
+                              pitch_hor=pitch_hor, pitch_ver=pitch_ver, **kwargs)
+    model_vtb = ShiftRegister(size=height, orientation='vertical', direction=-1, 
+                              pitch_hor=pitch_hor, pitch_ver=pitch_ver, **kwargs)
+    
+    pos_hlr = model_hlr.pos.copy()
+    angle_hlr = model_hlr.angle.copy()
+    pos_vbt = model_vbt.pos.copy()
+    angle_vbt = model_vbt.angle.copy()
+    pos_hrl = model_hrl.pos.copy()
+    angle_hrl = model_hrl.angle.copy()
+    pos_vtb = model_vtb.pos.copy()
+    angle_vtb = model_vtb.angle.copy()
+
+    pos = pos_hlr
+    angle = angle_hlr
+
+    pos_vbt[:,0] += np.max(pos_hlr[:,0]) + pitch_ver*np.sin(np.deg2rad(model_vbt.angle_d))
+    pos_vbt[:,1] += np.max(pos_hlr[:,1]) + pitch_ver*np.cos(np.deg2rad(model_vbt.angle_d))
+    pos = np.concatenate([pos, pos_vbt])
+    angle = np.concatenate([angle, angle_vbt])
+
+    pos_hrl[:,0] += np.max(pos_hlr[:,0]) - pitch_hor*np.cos(np.deg2rad(model_hrl.angle_d))
+    pos_hrl[:,1] += np.max(pos[:,1])
+    pos = np.concatenate([pos, pos_hrl])
+    angle = np.concatenate([angle, angle_hrl])
+
+
+    pos_vtb[:,0] += np.min(pos_hrl[:,0]) - pitch_ver * np.sin(np.deg2rad(model_vtb.angle_d))
+    pos_vtb[:,1] += np.min(pos_hrl[:,1]) - pitch_ver * np.cos(np.deg2rad(model_vtb.angle_d))
+    pos = np.concatenate([pos, pos_vtb])
+    angle = np.concatenate([angle, angle_vtb])
+
+    params.setdefault('sw_b', 1)
+    params.setdefault('sw_c', 1)
+    params.setdefault('sw_beta', 3)
+    params.setdefault('sw_gamma', 3)
+
+    model = CustomSpinIce(magnet_coords=pos, magnet_angles=angle, radians=True, **params)
+
+    return model
+
+'''
+ringbuf = make_ringbuf(3, 3, alpha=0.001, neighbor_distance=10, pitch_ver=1.5, pitch_hor=2)
+ringbuf.plot();
+'''

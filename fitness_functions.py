@@ -4,9 +4,7 @@ from itertools import permutations
 from functools import wraps, lru_cache
 from copy import copy
 from collections import OrderedDict
-from time import sleep
 from PIL import Image
-
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 import pickle as pkl
@@ -15,15 +13,10 @@ import warnings
 from flatspin import plotting
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.grid import Grid
-from flatspin.utils import get_default_params, import_class
-from flatspin.runner import run, run_dist, run_local
-from flatspin.sweep import sweep
-from flatspin.cmdline import eval_params
 
 import os
-import pandas as pd
-import shlex
-import sys
+
+
 
 
 class ProgressBar(tqdm):
@@ -40,162 +33,16 @@ class ParallelProgress(Parallel):
         self._progress_bar.update(inc)
 
 
-def flatspin_eval(fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, do_not_override_default=False,
-                  sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                  repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, **flatspin_kwargs):
-    """
-    fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
-    if an Individual already has fitness components the value(s) will be appended
-    (allows for multiple datasets per Individual)
-    using group_by, it is possible to use mutliple datasets to determine the fitness of an individual
-    """
-
-    if len(pop) < 1:
+def flatspin_eval(fit_func, pop, *args, **kwargs):
+    if len(pop) == 0:
         return pop
-    sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else [])
-    default_shared = pop[0].get_default_shared_params(outdir, gen)
-    if shared_params is None:
-        shared_params = default_shared
-    elif not do_not_override_default:
-        default_shared.update(shared_params)
-        shared_params = default_shared
-
-    shared_params.update(flatspin_kwargs)
-
-    if run_params is None:
-        run_params = pop[0].get_default_run_params(pop, sweep_list, condition=condition)
-
-    if preprocessing:
-        run_params = preprocessing(run_params)
-
-    if len(run_params) > 0:
-        id2indv = {individual.id: individual for individual in pop}
-        evolved_params = [
-            id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
-        ]
-        evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=group_by, dont_run=dont_run, dependent_params=dependent_params)
-        dataset = Dataset.read(shared_params["basepath"])
-        queue = dataset
-        if group_by:
-            _, queue = zip(*dataset.groupby(group_by))
-        queue = list(queue)
-        while len(queue) > 0:
-            ds = queue.pop(0)
-            with np.errstate():
-                indv_id = ds.index["indv_id"].values[0]
-                try:
-                    # calculate fitness of a dataset
-                    fit_components = fit_func(ds)
-                    try:
-                        fit_components = list(fit_components)
-                    except (TypeError):
-                        fit_components = [fit_components]
-
-                    # assign the fitness of the correct individual
-
-                    indv = id2indv[indv_id]
-                    if indv.fitness_components is not None:
-                        indv.fitness_components += fit_components
-                    else:
-                        indv.fitness_components = fit_components
-                except Exception as e:  # not done saving file
-                    if shared_params.get("run", "local") != "dist" or group_by:
-                        raise e
-                    if type(e) not in (FileNotFoundError, ):
-                        print(type(e), e)
-                    queue.append(ds)  # queue.append((indv_id, ds))
-                    sleep(2)
-
-    # individuals that have not been evaluated (malformed)
-    evaluated = set([rp["indv_id"] for rp in run_params])
-    for indv in [i for i in pop if i.id not in evaluated]:
-        indv.fitness_components = [np.nan]
-    return pop
-
-
-def evo_run(runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}):
-    """modified from run_sweep.py main()"""
-    if not evolved_params:
-        evolved_params = []
-    model_name = shared_params.pop("model", "CustomSpinIce")
-    model_class = import_class(model_name, "flatspin.model")
-    encoder_name = shared_params.get("encoder", "Sine")
-    encoder_class = (import_class(encoder_name, "flatspin.encoder") if type(encoder_name) is str else encoder_name)
-
-    data_format = shared_params.get("format", "npz")
-
-    params = get_default_params(run)
-    params["encoder"] = f"{encoder_class.__module__}.{encoder_class.__name__}"
-    params.update(get_default_params(model_class))
-    params.update(get_default_params(encoder_class))
-    params.update(shared_params)
-
-    info = {
-        "model": f"{model_class.__module__}.{model_class.__name__}",
-        "model_name": model_name,
-        "data_format": data_format,
-        "command": " ".join(map(shlex.quote, sys.argv)),
-    }
-
-    ext = data_format if is_archive_format(data_format) else "out"
-
-    outdir_tpl = "gen{:d}indv{:d}"
-
-    basepath = params["basepath"]
-    if os.path.exists(basepath):
-        # Refuse to overwrite an existing dataset
-        raise FileExistsError(basepath)
-    os.makedirs(basepath)
-
-    index = []
-    filenames = []
-    # Generate queue
-    for i, run_params in enumerate(runs_params):
-        newparams = copy(params)
-        newparams.update(run_params)
-        if evolved_params:
-            # get any flatspin params in evolved_params and update run param with them
-            run_params.update(
-                {k: v for k, v in evolved_params[i].items() if k in newparams}
-            )
-        if dependent_params:
-            # get any dependent params in dependent_params and update run param with them
-            dp = eval_params(dependent_params, run_params)
-            run_params.update(dp)
-
-        sub_run_name = newparams.get("sub_run_name", "x")
-        outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
-        filenames.append(outdir)
-        row = OrderedDict(run_params)
-        row.update({"outdir": outdir})
-        index.append(row)
-
-    # Save dataset
-    index = pd.DataFrame(index)
-    dataset = Dataset(index, params, info, basepath)
-    dataset.save()
-
-    if dont_run:
-        return
-    # Run!
-    # print("Starting sweep with {} runs".format(len(dataset)))
-    rs = np.random.get_state()
-    run_type = shared_params.get("run", "local")
-    if run_type == "local":
-        run_local(dataset, False)
-
-    elif run_type == "dist":
-        run_dist(dataset, wait=wait, max_jobs=max_jobs)
-
-    np.random.set_state(rs)
-    return
+    type(pop[0]).flatspin_eval(fit_func, pop, *args, **kwargs)
 
 
 def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, **kwargs):
     """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
         i.fitness = acc(i.fitness_components)
-
 
 def ignore_NaN_fits(func):
     """decorator to set individuals with nan in their fitness components to have nan fitness,
@@ -366,50 +213,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
 
-
 @ignore_empty_pop
-def flips_fitness(pop, gen, outdir, num_angles=1, other_sizes_fractions=None, sweep_params=None, repeat=1,
-                  repeat_spec=None, **flatspin_kwargs):
-    shared_params = pop[0].get_default_shared_params(outdir, gen)
-    shared_params.update(flatspin_kwargs)
-    if not other_sizes_fractions:
-        other_sizes_fractions = []
-    if num_angles > 1:
-        shared_params["input"] = [0, 1] * (shared_params["periods"] // 2)
-    sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else [])
-    run_params = pop[0].get_default_run_params(pop, sweep_list, condition=flatspin_kwargs.get("condition"))
-    frac_run_params = []
-    if len(run_params) > 0:
-        for rp in run_params:
-            rp.setdefault("sub_run_name", "")
-
-            for frac in other_sizes_fractions:
-                angles_frac = rp["magnet_angles"][
-                    : int(np.ceil(len(rp["magnet_angles"]) * frac))
-                ]
-                coords_frac = rp["magnet_coords"][
-                    : int(np.ceil(len(rp["magnet_coords"]) * frac))
-                ]
-                frp = {
-                    "indv_id": rp["indv_id"],
-                    "magnet_coords": coords_frac,
-                    "magnet_angles": angles_frac,
-                    "sub_run_name": rp["sub_run_name"] + f"_frac{frac}",
-                }
-                frac_run_params.append(dict(rp, **frp))
-            rp["sub_run_name"] += f"_frac{1}"
-
-    def fit_func(ds):
-        # fitness is number of steps, but ignores steps from first fifth of the run
-        steps = read_table(ds.tablefile("steps"))
-        fitn = (steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"])
-        return fitn
-
-    pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params, run_params=run_params + frac_run_params,
-                        repeat=repeat, repeat_spec=repeat_spec, **flatspin_kwargs)
-    return pop
-
-
 def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspin_kwargs):
     shared_params = pop[0].get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
@@ -1083,8 +887,8 @@ def ca_rule_fitness(pop, gen, outdir, target, group_by=None, sweep_params=None, 
 
         return fitn
 
-    pop=flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params, shared_params=default_shared_params,
-                        do_not_override_default=True, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, group_by=group_by, sweep_params=sweep_params, shared_params=default_shared_params,
+                        use_default_shared_params=False, **flatspin_kwargs)
     return pop
 
 
@@ -1244,7 +1048,6 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
 known_fits={
     "target_state_num": target_state_num_fitness,
     "state_num": state_num_fitness,
-    "flips": flips_fitness,
     "std_grid_field": std_grid_field_fitness,
     "target_order_percent": target_order_percent_fitness,
     "default": evaluate_outer,
