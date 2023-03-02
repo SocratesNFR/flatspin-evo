@@ -213,13 +213,15 @@ class Base_Individual(ABC):
             cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
             dataset = Dataset.read(shared_params["basepath"])
 
+            process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by)
+            """
             if run_type == "local":
                 process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by)
             elif run_type == "dist":
                 process_dataset_dist(dataset, id2indv, fit_func, shared_params, group_by)
             else:
                 raise ValueError("Unknown run type: {}".format(run_type))
-
+            """
         # individuals that have not been evaluated (malformed)
         evaluated = set([rp["indv_id"] for rp in run_params])
         for indv in [i for i in pop if i.id not in evaluated]:
@@ -314,7 +316,7 @@ def generate_script(template, outfile, **params):
         fp.write(script)
 
 
-def make_job_script(dataset, group_by):
+def make_job_script(dataset, group_by, job_script_template):
     # Construct a sensible name for the job script
     job_script_dir = dataset.basepath
     job_script_name = os.path.basename(job_script_template)
@@ -331,6 +333,7 @@ def make_job_script(dataset, group_by):
 
 
 def process_dataset_dist(dataset, id2indv, fit_func, shared_params, group_by):
+    raise NotImplementedError("Distributed processing not implemented yet")
     queue = dataset
     job_script = make_job_script(dataset, group_by)
 
@@ -348,7 +351,7 @@ def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by):
                 fit_components = calculate_fitness(ds, fit_func)
                 assign_fitness(id2indv, indv_id, fit_components)
             except Exception as e:
-                handle_exception(e, queue, ds, shared_params, group_by)
+                handle_exception(e, queue, ds, False)#group_by)
 
 
 def get_ds_indv_id(ds):
