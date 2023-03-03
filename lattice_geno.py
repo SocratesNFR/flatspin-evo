@@ -12,7 +12,7 @@ from base_individual import Base_Individual
 import fitness_functions
 import evo_alg as ea
 
-
+#################################################Hole shape changing is dodgy as max/min holes = None dodgy not passed on
 class Individual(Base_Individual):
     _id_counter = count(0)
     basis_min = 0.3
@@ -21,9 +21,10 @@ class Individual(Base_Individual):
 
     def __init__(self, *, lattice_shape=(10, 10), basis0_len=None, basis0_angle=None, basis1_len=None, basis1_angle=None, id=None, gen=0,
                  angle_tile_map=None, angle_tile_shape=(3, 3), angle_tile_max_dim=None, angle_table=None, num_angles=None,
-                 hole_tile=None, hole_tile_shape=None, hole_tile_max_dim=None, min_holes=None, max_holes=None, parent_ids=None, **kwargs):
+                 hole_tile=None, hole_tile_shape=None, hole_tile_max_dim=None, min_holes=None, max_holes=None, parent_ids=None, min_magnets=None, **kwargs):
         self.gen = gen
-        self.lattice_shape = lattice_shape
+        self._lattice_shape = lattice_shape
+        self.min_magnets = min_magnets
 
         if parent_ids is None:
             self.parent_ids = []
@@ -62,15 +63,12 @@ class Individual(Base_Individual):
                 hole_tile_shape = (np.random.randint(1, hole_tile_max_dim + 1), np.random.randint(1, hole_tile_max_dim + 1))
             self.hole_tile_shape = hole_tile_shape if hole_tile_shape is not None else self.angle_tile_shape
         self.hole_tile_max_dim = hole_tile_max_dim
-        if max_holes is None:
-            self.max_holes = np.prod(self.hole_tile_shape) - 1
-        else:
-            self.max_holes = max_holes
+        self.max_holes = max_holes
 
         self.min_holes = min_holes if min_holes is not None else 0
 
         if hole_tile is None:
-            num_holes = np.random.randint(self.min_holes, self.max_holes + 1)
+            num_holes = np.random.randint(self.min_holes, (self.max_holes or np.prod(self.hole_tile_shape) - 1) + 1)
             self.hole_tile = np.random.permutation(np.concatenate((np.zeros(num_holes), np.ones(np.prod(self.hole_tile_shape) - num_holes)))).reshape(self.hole_tile_shape)
 
         self.fitness = None
@@ -85,6 +83,22 @@ class Individual(Base_Individual):
 
     def plot(self, **kwargs):
         self.as_ASI.plot(**kwargs)
+
+    @property
+    def lattice_shape(self):
+        """Returns the lattice shape, increasing it if necessary to satisfy the minimum number of magnets."""  
+        if self.min_magnets is None:
+            return self._lattice_shape
+
+        num_mags = np.sum(self.hole_tile) * np.prod(self._lattice_shape)
+        if num_mags >= self.min_magnets:
+            return self._lattice_shape
+
+        b = np.sum(self._lattice_shape)
+        c = num_mags - self.min_magnets
+        increase = np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2)
+        return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
+
 
     @property
     def basis0(self):
