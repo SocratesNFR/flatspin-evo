@@ -63,12 +63,12 @@ class Individual(Base_Individual):
                 hole_tile_shape = (np.random.randint(1, hole_tile_max_dim + 1), np.random.randint(1, hole_tile_max_dim + 1))
             self.hole_tile_shape = hole_tile_shape if hole_tile_shape is not None else self.angle_tile_shape
         self.hole_tile_max_dim = hole_tile_max_dim
-        self.max_holes = max_holes
+        self._max_holes = max_holes
 
-        self.min_holes = min_holes if min_holes is not None else 0
+        self._min_holes = min_holes 
 
         if hole_tile is None:
-            num_holes = np.random.randint(self.min_holes, (self.max_holes or np.prod(self.hole_tile_shape) - 1) + 1)
+            num_holes = np.random.randint(self.min_holes, (self.max_holes) + 1)
             self.hole_tile = np.random.permutation(np.concatenate((np.zeros(num_holes), np.ones(np.prod(self.hole_tile_shape) - num_holes)))).reshape(self.hole_tile_shape)
 
         self.fitness = None
@@ -112,6 +112,24 @@ class Individual(Base_Individual):
     @property
     def angle_tile(self):
         return self.angle_table[self.angle_tile_map]
+
+    @property
+    def min_holes(self):
+        if self._min_holes is None:
+            return 0
+        if 0 < self._min_holes < 1: # Fraction of holes
+            return min(np.round(self._min_holes * np.prod(self.hole_tile_shape)), np.prod(self.hole_tile_shape) - 1)
+
+        return self._min_holes
+    @property
+    def max_holes(self):
+        if self._max_holes is None:
+            return np.prod(self.hole_tile_shape) - 1
+
+        if 0 < self._max_holes < 1: # Fraction of holes
+            return min(np.round(self._max_holes * np.prod(self.hole_tile_shape)), np.prod(self.hole_tile_shape) - 1)
+
+        return self._max_holes
 
     @property
     def as_ASI(self):
