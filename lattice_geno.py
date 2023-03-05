@@ -125,7 +125,7 @@ class Individual(Base_Individual):
         if 0 < self._min_holes < 1: # Fraction of holes
             return int(min(np.round(self._min_holes * np.prod(self.hole_tile_shape)), np.prod(self.hole_tile_shape) - 1))
 
-        return self._min_holes
+        return int(self._min_holes)
     @property
     def max_holes(self):
         if self._max_holes is None:
@@ -134,7 +134,7 @@ class Individual(Base_Individual):
         if 0 < self._max_holes < 1: # Fraction of holes
             return int(min(np.round(self._max_holes * np.prod(self.hole_tile_shape)), np.prod(self.hole_tile_shape) - 1))
 
-        return self._max_holes
+        return int(self._max_holes)
 
     @property
     def as_ASI(self):
