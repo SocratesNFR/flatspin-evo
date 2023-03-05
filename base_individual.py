@@ -209,7 +209,7 @@ class Base_Individual(ABC):
             evolved_params = [
                 id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
             ]
-            wait = True  # group_by or run_type == "dist"
+            wait = run_type == "local" or group_by
             cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
             dataset = Dataset.read(shared_params["basepath"])
 
