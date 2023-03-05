@@ -96,14 +96,14 @@ class Individual(Base_Individual):
         if self.min_magnets is None:
             return self._lattice_shape
 
-        num_mags = self.num_magnets
+        num_mags = self.num_magnets()
         if num_mags >= self.min_magnets:
             return self._lattice_shape
 
         b = np.sum(self._lattice_shape)
         c = num_mags - self.min_magnets
         increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
-        assert np.sum(self.hole_tile) * np.prod((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) >= self.min_magnets
+        assert self.num_magnets((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) >= self.min_magnets
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
