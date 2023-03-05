@@ -238,9 +238,12 @@ def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspi
     return pop
 
 
-def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=5, velo_values=5, **flatspin_kwargs):
+def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=5, velo_values=5, min_steps=1, **flatspin_kwargs):
 
     def fit_func(ds):
+        stats = read_table(ds.tablefile("stats"))
+        if int(stats.loc[1][1]) < min_steps:
+            return np.nan
         UV = load_output(ds, "mag", grid_size=grid_size, flatten=False)
         U = UV[..., 0]  # x components
         V = UV[..., 1]  # y components
