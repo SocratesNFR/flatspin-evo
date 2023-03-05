@@ -14,8 +14,8 @@ import evo_alg as ea
 
 class Individual(Base_Individual):
     _id_counter = count(0)
-    basis_min = 0.3
-    basis_max = 1.3
+    basis_min = 0.5
+    basis_max = 1.1
     min_angle_offset = np.deg2rad(10)
 
     def __init__(self, *, lattice_shape=(10, 10), basis0_len=None, basis0_angle=None, basis1_len=None, basis1_angle=None, id=None, gen=0,
@@ -85,18 +85,23 @@ class Individual(Base_Individual):
         self.as_ASI.plot(**kwargs)
 
     @property
+    def num_magnets(self):
+        return np.sum(self.hole_tile) * np.prod(self._lattice_shape)
+
+    @property
     def lattice_shape(self):
         """Returns the lattice shape, increasing it if necessary to satisfy the minimum number of magnets."""  
         if self.min_magnets is None:
             return self._lattice_shape
 
-        num_mags = np.sum(self.hole_tile) * np.prod(self._lattice_shape)
+        num_mags = self.num_magnets
         if num_mags >= self.min_magnets:
             return self._lattice_shape
 
         b = np.sum(self._lattice_shape)
         c = num_mags - self.min_magnets
         increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
+        assert np.sum(self.hole_tile) * np.prod((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) >= self.min_magnets
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
