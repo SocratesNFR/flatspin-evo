@@ -12,7 +12,6 @@ from base_individual import Base_Individual
 import fitness_functions
 import evo_alg as ea
 
-#################################################Hole shape changing is dodgy as max/min holes = None dodgy not passed on
 class Individual(Base_Individual):
     _id_counter = count(0)
     basis_min = 0.3
@@ -71,6 +70,7 @@ class Individual(Base_Individual):
             num_holes = np.random.randint(self.min_holes, (self.max_holes) + 1)
             self.hole_tile = np.random.permutation(np.concatenate((np.zeros(num_holes), np.ones(np.prod(self.hole_tile_shape) - num_holes)))).reshape(self.hole_tile_shape)
 
+        self.hole_tile = self.hole_tile.astype(int)
         self.fitness = None
         self.fitness_components = []
         self.fitness_info = []
@@ -96,7 +96,7 @@ class Individual(Base_Individual):
 
         b = np.sum(self._lattice_shape)
         c = num_mags - self.min_magnets
-        increase = np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2)
+        increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
@@ -239,6 +239,7 @@ class Individual(Base_Individual):
             self.hole_tile[np.random.choice(np.nonzero(self.hole_tile)[0], self.min_holes - num_holes, replace=False)] = 0
         elif num_holes > self.max_holes:
             self.hole_tile[np.random.choice(np.nonzero(self.hole_tile == 0)[0], num_holes - self.max_holes, replace=False)] = 1
+        self.hole_tile = self.hole_tile.astype(int)
 
     @staticmethod
     def mutate_angle_tile_map(child, strength):
