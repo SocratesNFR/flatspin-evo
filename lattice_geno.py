@@ -64,7 +64,7 @@ class Individual(Base_Individual):
         self.hole_tile_max_dim = hole_tile_max_dim
         self._max_holes = max_holes
 
-        self._min_holes = min_holes 
+        self._min_holes = min_holes
 
         if hole_tile is None:
             num_holes = np.random.randint(self.min_holes, (self.max_holes) + 1)
@@ -398,8 +398,12 @@ class Individual(Base_Individual):
 
     def copy(self, **override_kwargs):
         ignored_attrs = ['pos', 'angle', 'id', 'gen']
+        rename_attrs = {'_lattice_size': 'lattice_size', '_max_holes': 'max_holes', '_min_holes': 'min_holes'}
         params = {k: v for k, v in vars(self).items() if k not in ignored_attrs}
         params.update(override_kwargs)
+        for old_name, new_name in rename_attrs.items():
+            if old_name in params:
+                params[new_name] = params.pop(old_name)
 
         return Individual(**params)
 
