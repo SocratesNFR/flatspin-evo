@@ -116,7 +116,7 @@ class Individual(Base_Individual):
         increase = base_increase
         while self.num_magnets((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) < self.min_magnets:
             increase += 1
-            assert increase <= base_increase + np.max(self.hole_tile.shape) + 1, "Increase is too large"
+            assert increase <= base_increase + np.max(self.hole_tile.shape) + 1, f"Increase {increase} + {base_increase} + {np.max(self.hole_tile.shape)} is too large for hole_tile_shape {self.hole_tile.shape}"
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
