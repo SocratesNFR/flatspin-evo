@@ -78,6 +78,7 @@ class Individual(Base_Individual):
         self._as_asi = None
 
         self.init_evolved_params(**kwargs)
+        assert self.num_magnets(self.lattice_shape) == len(self.angles), f"Number of magnets ({self.num_magnets(self.lattice_shape)}) does not match number of angles ({len(self.angles)})"
 
     def is_in_bounds(self, point):
         return 0 <= point[0] <= self.pheno_bounds[0] and 0 <= point[1] <= self.pheno_bounds[1]
@@ -95,6 +96,7 @@ class Individual(Base_Individual):
         total = np.sum(self.hole_tile) * div[0] * div[1]
         total += np.sum(self.hole_tile[:remainder[0], :] * div[1])
         total += np.sum(self.hole_tile[:, :remainder[1]] * div[0])
+        total += np.sum(self.hole_tile[:remainder[0], :remainder[1]])
 
         return total
 
@@ -119,7 +121,7 @@ class Individual(Base_Individual):
         while self.num_magnets((self._lattice_shape[0] + bi_x + increase, self._lattice_shape[1] + bi_y + increase)) < self.min_magnets:
             increase += 1
             assert increase <= np.max(self.hole_tile.shape) + 1, f"Increase {increase} + {base_increase} + {np.max(self.hole_tile.shape)} is too large for hole_tile_shape {self.hole_tile.shape}"
-        return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
+        return (self._lattice_shape[0] + bi_x + increase, self._lattice_shape[1] + bi_y + increase)
 
 
     @property
@@ -155,9 +157,8 @@ class Individual(Base_Individual):
 
     @property
     def as_ASI(self):
-        if self._as_asi is None:
-            self._as_asi = TileLatticeSpinIce(basis0=self.basis0, basis1=self.basis1, angle_tile=self.angle_tile, hole_tile=self.hole_tile, radians=True, size=self.lattice_shape)
-        return self._as_asi
+        return TileLatticeSpinIce(basis0=self.basis0, basis1=self.basis1, angle_tile=self.angle_tile, hole_tile=self.hole_tile, radians=True, size=self.lattice_shape)
+
 
     @property
     def coords(self):
@@ -344,13 +345,20 @@ class Individual(Base_Individual):
         arr = np.zeros_like(rand).astype(arr1.dtype)
         for i in range(shape[0]):
             for j in range(shape[1]):
-                if i >= arr1.shape[0] or j >= arr1.shape[1]:    
-                    arr[i, j] = arr2[i, j]
-                elif i >= arr2.shape[0] or j >= arr2.shape[1]:
+                if Individual.valid_index(arr1, i, j) and Individual.valid_index(arr2, i, j):
+                    arr[i, j] = arr1[i, j] if rand[i, j] < 0.5 else arr2[i, j]
+                elif Individual.valid_index(arr1, i, j):
                     arr[i, j] = arr1[i, j]
-                else:
-                    arr[i, j] = arr1[i, j] if rand[i, j] > 0.5 else arr2[i, j]
+                elif Individual.valid_index(arr2, i, j):
+                    arr[i, j] = arr2[i, j]
+                else: # sample random value from arr1 or arr2
+                    arr[i, j] = np.random.choice(np.concatenate((arr1.flatten(), arr2.flatten())))
+
         return arr
+
+    @staticmethod
+    def valid_index(arr, i, j):
+        return i >= 0 and j >= 0 and i < arr.shape[0] and j < arr.shape[1]
 
     @staticmethod
     def crossover_arrays_1d(arr1, arr2, size=None):
