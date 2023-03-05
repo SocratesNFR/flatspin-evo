@@ -112,10 +112,11 @@ class Individual(Base_Individual):
                      self._lattice_shape[1] - (self._lattice_shape[1] % self.hole_tile_shape[1])) # make hole_tile fit exactly into lattice_shape
         b = np.sum(even_shape)
         c = self.num_magnets(even_shape) - self.min_magnets
-        increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
+        base_increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
+        increase = base_increase
         while self.num_magnets((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) < self.min_magnets:
             increase += 1
-            assert increase <= np.max(self.hole_tile.shape) + 1, "Increase is too large"
+            assert increase <= base_increase + np.max(self.hole_tile.shape) + 1, "Increase is too large"
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
