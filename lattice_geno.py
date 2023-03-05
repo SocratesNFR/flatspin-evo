@@ -12,11 +12,12 @@ from base_individual import Base_Individual
 import fitness_functions
 import evo_alg as ea
 
+
 class Individual(Base_Individual):
     _id_counter = count(0)
     basis_min = 0.5
     basis_max = 1.1
-    min_angle_offset = np.deg2rad(10)
+    min_angle_offset = np.deg2rad(45)
 
     def __init__(self, *, lattice_shape=(10, 10), basis0_len=None, basis0_angle=None, basis1_len=None, basis1_angle=None, id=None, gen=0,
                  angle_tile_map=None, angle_tile_shape=(3, 3), angle_tile_max_dim=None, angle_table=None, num_angles=None,
@@ -84,9 +85,10 @@ class Individual(Base_Individual):
     def plot(self, **kwargs):
         self.as_ASI.plot(**kwargs)
 
-    @property
-    def num_magnets(self):
-        return np.sum(self.hole_tile) * np.prod(self._lattice_shape)
+    def num_magnets(self, lattice_shape=None):
+        if lattice_shape is None:
+            lattice_shape = self._lattice_shape
+        return np.sum(self.hole_tile) * np.prod(lattice_shape)
 
     @property
     def lattice_shape(self):
@@ -122,7 +124,7 @@ class Individual(Base_Individual):
     def min_holes(self):
         if self._min_holes is None:
             return 0
-        if 0 < self._min_holes < 1: # Fraction of holes
+        if 0 < self._min_holes < 1:  # Fraction of holes
             return int(min(np.round(self._min_holes * np.prod(self.hole_tile_shape)), np.prod(self.hole_tile_shape) - 1))
 
         return int(self._min_holes)
@@ -438,7 +440,8 @@ class Individual(Base_Individual):
             for i, j, rp in sweep_list:
                 run_params.append(dict(rp, indv_id=id, basis0=indv.basis0, basis1=indv.basis1, angle_tile=indv.angle_tile, hole_tile=indv.hole_tile,
                 size=indv.lattice_shape, sub_run_name=f"_{i}_{j}"))
-
+            print("min_mags", indv.min_mags)
+            print("num_mags", indv.num_mags(indv.lattice_shape))
         return run_params
 
 
