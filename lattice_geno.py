@@ -88,7 +88,15 @@ class Individual(Base_Individual):
     def num_magnets(self, lattice_shape=None):
         if lattice_shape is None:
             lattice_shape = self._lattice_shape
-        return np.sum(self.hole_tile) * np.prod(lattice_shape)
+
+        div = (lattice_shape[0] // self.hole_tile_shape[0], lattice_shape[1] // self.hole_tile_shape[1])
+        remainder = (lattice_shape[0] % self.hole_tile_shape[0], lattice_shape[1] % self.hole_tile_shape[1])
+
+        total = np.sum(self.hole_tile) * div[0] * div[1]
+        total += np.sum(self.hole_tile[:remainder[0], :] * div[1])
+        total += np.sum(self.hole_tile[:, :remainder[1]] * div[0])
+
+        return total
 
     @property
     def lattice_shape(self):
@@ -100,10 +108,14 @@ class Individual(Base_Individual):
         if num_mags >= self.min_magnets:
             return self._lattice_shape
 
-        b = np.sum(self._lattice_shape)
-        c = num_mags - self.min_magnets
+        even_shape = (self._lattice_shape[0] - (self._lattice_shape[0] % self.hole_tile_shape[0]),
+                     self._lattice_shape[1] - (self._lattice_shape[1] % self.hole_tile_shape[1])) # make hole_tile fit exactly into lattice_shape
+        b = np.sum(even_shape)
+        c = self.num_magnets(even_shape) - self.min_magnets
         increase = int(np.ceil((-b + np.sqrt(b * b - 4 * c)) / 2))
-        assert self.num_magnets((self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)) >= self.min_magnets
+        while self.num_magnets(self._lattice_shape[0] + increase, self._lattice_shape[1] + increase) < self.min_magnets:
+            increase += 1
+            assert increase <= np.max(self.hole_tile.shape) + 1, "Increase is too large"
         return (self._lattice_shape[0] + increase, self._lattice_shape[1] + increase)
 
 
@@ -440,8 +452,6 @@ class Individual(Base_Individual):
             for i, j, rp in sweep_list:
                 run_params.append(dict(rp, indv_id=id, basis0=indv.basis0, basis1=indv.basis1, angle_tile=indv.angle_tile, hole_tile=indv.hole_tile,
                 size=indv.lattice_shape, sub_run_name=f"_{i}_{j}"))
-            print("min_mags", indv.min_magnets)
-            print("num_mags", indv.num_magnets(indv.lattice_shape))
         return run_params
 
 
