@@ -440,8 +440,8 @@ class Individual(Base_Individual):
             for i, j, rp in sweep_list:
                 run_params.append(dict(rp, indv_id=id, basis0=indv.basis0, basis1=indv.basis1, angle_tile=indv.angle_tile, hole_tile=indv.hole_tile,
                 size=indv.lattice_shape, sub_run_name=f"_{i}_{j}"))
-            print("min_mags", indv.min_mags)
-            print("num_mags", indv.num_mags(indv.lattice_shape))
+            print("min_mags", indv.min_magnets)
+            print("num_mags", indv.num_magnets(indv.lattice_shape))
         return run_params
 
 
