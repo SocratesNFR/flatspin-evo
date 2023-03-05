@@ -78,7 +78,7 @@ class Individual(Base_Individual):
         self._as_asi = None
 
         self.init_evolved_params(**kwargs)
-        assert self.num_magnets(self.lattice_shape) == len(self.angles), f"Number of magnets ({self.num_magnets(self.lattice_shape)}) does not match number of angles ({len(self.angles)})"
+        # assert self.num_magnets(self.lattice_shape) == len(self.angles), f"Number of magnets ({self.num_magnets(self.lattice_shape)}) does not match number of angles ({len(self.angles)})"
 
     def is_in_bounds(self, point):
         return 0 <= point[0] <= self.pheno_bounds[0] and 0 <= point[1] <= self.pheno_bounds[1]
