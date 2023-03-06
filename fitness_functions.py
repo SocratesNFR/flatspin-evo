@@ -238,7 +238,7 @@ def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspi
     return pop
 
 
-def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=5, velo_values=5, min_steps=1, **flatspin_kwargs):
+def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=8, velo_values=5, min_steps=1, **flatspin_kwargs):
 
     def fit_func(ds):
         stats = read_table(ds.tablefile("stats"))
@@ -257,9 +257,9 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
         fitn = zipfness(norm_angle.flatten())
         # duration
         if dur_values > 1:
-            angle_diffs = np.abs(np.diff(angle.reshape(angle.shape[0], -1), axis=0))
-            angle_diffs = scale_to_unit(angle_diffs, 1, velo_values).astype(int)
-            fitn += zipfness(angle_diffs.flatten())
+            counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values) 
+            fitn += zipfness(counts=counts)
+
         # velocity
         if velo_values > 1:
             magn = np.linalg.norm(UV, axis=-1).flatten()
@@ -273,10 +273,37 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
     return pop
 
 
-def zipfness(x):
+def consecutive_num_distribution(arr, max_consec=None):
+    res = []
+    for col in (np.diff(arr, axis=0) == 0).astype(int).T:
+        res.append(consecutive_ones_lengths(col))
+    res = np.concatenate(res)
+    n_ones = np.prod(arr.shape) - np.sum(res)
+    counts = np.bincount(res)[1:]  # ignore that there are "0 len 0 runs"
+    if max_consec is not None and len(counts) > max_consec:
+        counts[max_consec] += np.sum(counts[max_consec + 1:])
+        counts = counts[:max_consec + 1]
+    counts[0] = n_ones
+    return counts
+
+
+def consecutive_ones_lengths(arr):
+    # Create a boolean mask for consecutive ones
+    mask = np.concatenate(([0], arr, [0])) == 1
+    # Find the indices of the start and end of each run of consecutive
+    idx = np.flatnonzero(mask[:-1] != mask[1:])
+    # Calculate the length of each run of consecutive ones
+    lengths = idx[1::2] - idx[::2]
+    lengths += 1
+    return lengths
+
+def zipfness(x=None, counts=None):
     """zipfness of a vector x"""
-    x_counts = np.bincount(x).astype(float)
-    x_counts = x_counts[x_counts > 0]
+    assert (x is None) != (counts is None), "must provide either x or counts"
+    if counts is None:
+        x_counts = np.bincount(x).astype(float)
+    else:
+        x_counts = counts.astype(float)
     x_counts[::-1].sort()  # sort in descending order
     x_counts /= x_counts[0]  # normalize to first element == 1
 
