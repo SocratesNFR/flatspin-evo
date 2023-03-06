@@ -254,7 +254,7 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
         norm_angle = norm_angle.round().astype(int)
         norm_angle[norm_angle >= scale_size] = 0
 
-        fitn = zipfness(norm_angle.flatten())
+        fitn = zipfness(norm_angle.flatten(), min_length=scale_size)
         # duration
         if dur_values > 1:
             counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values) 
@@ -265,7 +265,7 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
             magn = np.linalg.norm(UV, axis=-1).flatten()
             # scale magnitudes to 0-magn_values and discretize
             magn = np.round(magn * velo_values / np.max(magn)).astype(int)
-            fitn += zipfness(magn)
+            fitn += zipfness(magn, min_length=velo_values)
 
         return fitn
 
@@ -297,11 +297,11 @@ def consecutive_ones_lengths(arr):
     lengths += 1
     return lengths
 
-def zipfness(x=None, counts=None):
+def zipfness(x=None, *, counts=None, min_length=0):
     """zipfness of a vector x"""
     assert (x is None) != (counts is None), "must provide either x or counts"
     if counts is None:
-        x_counts = np.bincount(x).astype(float)
+        x_counts = np.bincount(x, minlength=min_length)
     else:
         x_counts = counts.astype(float)
     x_counts[::-1].sort()  # sort in descending order
