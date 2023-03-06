@@ -301,7 +301,7 @@ def zipfness(x=None, *, counts=None, min_length=0):
     """zipfness of a vector x"""
     assert (x is None) != (counts is None), "must provide either x or counts"
     if counts is None:
-        x_counts = np.bincount(x, minlength=min_length)
+        x_counts = np.bincount(x, minlength=min_length).astype(float)
     else:
         x_counts = counts.astype(float)
     x_counts[::-1].sort()  # sort in descending order
