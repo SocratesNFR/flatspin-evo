@@ -9,10 +9,12 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 import pickle as pkl
 import warnings
+import math
 
 from flatspin import plotting
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.grid import Grid
+
 
 import os
 
@@ -238,7 +240,8 @@ def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspi
     return pop
 
 
-def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=8, velo_values=5, min_steps=1, **flatspin_kwargs):
+def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=8, velo_values=5, min_steps=1,
+                zipf_coeff=50, entropy_coeff=50, **flatspin_kwargs):
 
     def fit_func(ds):
         stats = read_table(ds.tablefile("stats"))
@@ -254,24 +257,49 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
         norm_angle = norm_angle.round().astype(int)
         norm_angle[norm_angle >= scale_size] = 0
 
-        fitn = zipfness(norm_angle.flatten(), min_length=scale_size)
+        z_fitn = zipfness(norm_angle.flatten(), min_length=scale_size)
         # duration
         if dur_values > 1:
             counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values) 
-            fitn += zipfness(counts=counts)
+            z_fitn += zipfness(counts=counts)
 
         # velocity
         if velo_values > 1:
             magn = np.linalg.norm(UV, axis=-1).flatten()
             # scale magnitudes to 0-magn_values and discretize
             magn = np.round(magn * velo_values / np.max(magn)).astype(int)
-            fitn += zipfness(magn, min_length=velo_values)
+            z_fitn += zipfness(magn, min_length=velo_values)
 
-        return fitn
+        # entropy
+        if entropy_coeff == 0:
+            entr_fitn = 0
+        else:
+            max_unique = np.min((np.prod(grid_size), scale_size**norm_angle.shape[0]))  # max number of unique rows in norm_angle
+            entr_fitn = entropy(norm_angle.reshape(-1, np.prod(grid_size)), base=max_unique)
+
+        return zipf_coeff * z_fitn + entropy_coeff * entr_fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
 
+
+def entropy(arr, base=None):
+    """ Computes entropy of label distribution. """
+    n_labels = len(arr)
+    if n_labels <= 1:
+        return 0
+    _, counts = np.unique(arr, axis=0, return_counts=True)
+    probs = counts / n_labels
+    n_classes = np.count_nonzero(probs)
+    if n_classes <= 1:
+        return 0
+    ent = 0.
+
+    base = math.e if base is None else base
+    # Compute entropy
+    for i in probs:
+        ent -= i * math.log(i, base)
+    return ent
 
 def consecutive_num_distribution(arr, max_consec=None):
     res = []
@@ -297,7 +325,7 @@ def consecutive_ones_lengths(arr):
     lengths += 1
     return lengths
 
-def zipfness(x=None, *, counts=None, min_length=0):
+def zipfness(x=None, *, counts=None, min_length=0, normalize_error=True):
     """zipfness of a vector x"""
     assert (x is None) != (counts is None), "must provide either x or counts"
     if counts is None:
@@ -309,6 +337,9 @@ def zipfness(x=None, *, counts=None, min_length=0):
 
     target = zipf(len(x_counts))
     zipfness = np.sum(np.abs(x_counts - target))
+    if normalize_error:
+        max_error = np.sum(np.abs(1 - np.array(target)))
+        zipfness /= max_error
     return zipfness
 
 @lru_cache
