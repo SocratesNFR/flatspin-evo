@@ -334,12 +334,35 @@ def crossover(pop, cx_prob, parent_list=None):
     return parent_list, kids_list
 
 
+def random_search_main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness, individual_params={},
+         outer_eval_params={}, sweep_params=OrderedDict(), dependent_params={}, group_by=None, *, n_evals=100, n_batches=10, **kwargs):
+    print("Initialising")
+    # create superdataset
+    index = pd.DataFrame()
+    info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
+    dataset = Dataset(index, None, info, basepath=outdir)
+
+    evals_per_batch = n_evals // n_batches
+    remaining_evals = n_evals % n_batches
+    for batch in range(n_batches):
+        print(f"Batch {batch+1} / {n_batches}")
+        pop = [individual_class(**individual_params) for _ in range(evals_per_batch)]
+        if batch == 0:
+            pop += [individual_class(**individual_params) for _ in range(remaining_evals)]
+
+        evaluate_inner(pop, batch, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
+        evaluate_outer(pop, basepath=outdir, gen=batch, **outer_eval_params)
+
+        update_superdataset(dataset, outdir, pop, batch, minimize_fitness)
+        dataset.save()
+
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True, **kwargs):
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True, 
+         random_search=False, **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -349,6 +372,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         os.makedirs(outdir)
 
     setup_evolved_params(evolved_params, individual_class)
+
+    if random_search:
+        random_search_main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness, individual_params, outer_eval_params, sweep_params, dependent_params, group_by, **kwargs)
+        return
 
     if continue_run:
         pop, dataset = setup_continue_run(outdir, individual_class, starting_gen)
@@ -442,6 +469,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
 
         best = save_stats(outdir, pop, minimize_fitness)
         print(f"best fitness: {best.fitness}")
+        if len(best.fitness_components) > 1:
+            print(f"    with fitness components: {best.fitness_components}")
         save_snapshot(outdir, pop)
         if stop_at_fitness is not None and np.isfinite(best.fitness) and (
                 (minimize_fitness and best.fitness <= stop_at_fitness) or ((not minimize_fitness) and best.fitness >= stop_at_fitness)
@@ -453,3 +482,4 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         gen_times.append((datetime.now() - time).total_seconds())
     # best.plot()
     return best
+
