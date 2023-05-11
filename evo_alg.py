@@ -346,15 +346,16 @@ def random_search_main(outdir, individual_class, evaluate_inner, evaluate_outer,
     remaining_evals = n_evals % n_batches
     for batch in range(n_batches):
         print(f"Batch {batch+1} / {n_batches}")
-        pop = [individual_class(**individual_params) for _ in range(evals_per_batch)]
+        pop = [individual_class(gen=batch, **individual_params) for _ in range(evals_per_batch)]
         if batch == 0:
-            pop += [individual_class(**individual_params) for _ in range(remaining_evals)]
+            pop += [individual_class(gen=batch, **individual_params) for _ in range(remaining_evals)]
 
         evaluate_inner(pop, batch, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         evaluate_outer(pop, basepath=outdir, gen=batch, **outer_eval_params)
 
         update_superdataset(dataset, outdir, pop, batch, minimize_fitness)
         dataset.save()
+
 
 def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True, *,
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
