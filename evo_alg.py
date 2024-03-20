@@ -73,9 +73,12 @@ def nan_select_filter(func):
         nan_pop, fin_pop = [], []
         for indv in pop:
             (fin_pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
-
+        
         if fin_pop:
             pop = func(fin_pop, pop_size, *args, **kwargs)
+        else: 
+            pop = []
+
         if len(pop) < pop_size:
             pop += list(np.random.choice(nan_pop, min(pop_size - len(pop), len(nan_pop)), replace=False))
 
@@ -161,12 +164,12 @@ def save_stats(outdir, pop, minimize_fitness):
     return best
 
 
-def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
-    pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
+def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True, dataset_params=None):
+    #pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
 
     if len(pop) < 1:
         return
-
+    dataset_params = dataset_params or []
     best = pop[0]
     if len(pop) > 1:
         fn = min if minimize_fitness else max
@@ -175,11 +178,12 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
     for indv in pop:
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
-            copy_row = ind[ind["indv_id"] == indv.id].iloc[0].copy()
+            copy_row = ind[ind["indv_id"] == indv.id].iloc[:1].copy() # copy the row, use :1 range to keep as dataframe
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
-            copy_row["best"] = int(indv == best)
-            dataset.index = ind.append(copy_row, ignore_index=True)
+            copy_row["best"] = int(indv == best)            
+            #dataset.index = ind.append(copy_row, ignore_index=True)
+            dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
         else:
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
@@ -187,6 +191,8 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
             ind.insert(0, 'gen', gen)  # current generation
             ind.insert(2, 'fitness', indv.fitness)
             ind.insert(3, 'best', int(indv == best))
+            for i, param in enumerate(dataset_params):
+                ind.insert(4 + i, param, [getattr(indv, param)])
 
             # patch outdir
             ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))
@@ -195,8 +201,8 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True):
             # fitness_componenets should be added last due to variable column number
             for i, comp in enumerate(indv.fitness_components):
                 ind.insert(len(ind.columns), f"fitness_component{i}", comp)
-            dataset.index = dataset.index.append(ind)
-
+            #dataset.index = dataset.index.append(ind)
+            dataset.index = pd.concat([dataset.index, ind], ignore_index=True)
         if not dataset.params:
             dataset.params = ds.params
 
@@ -227,7 +233,7 @@ def improvement_rate(mutant_pop, dataset, minimize_fitness=True):
 
 def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness=True,
         *, individual_params={}, outer_eval_params={}, sweep_params=OrderedDict(), group_by=None, starting_pop=None,
-        keep_id=False, **kwargs):
+        keep_id=False, dataset_params=None, **kwargs):
 
     check_args = np.unique(list(kwargs) + list(sweep_params), return_counts=True)
     check_args = [check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1]
@@ -262,7 +268,7 @@ def only_run_fitness_func(outdir, individual_class, evaluate_inner, evaluate_out
     info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
     dataset = Dataset(index, params, info, basepath=outdir)
 
-    update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
+    update_superdataset(dataset, outdir, pop, 0, minimize_fitness, dataset_params=dataset_params)
     dataset.save()
 
 
@@ -335,7 +341,7 @@ def crossover(pop, cx_prob, parent_list=None):
 
 
 def random_search_main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitness, individual_params={},
-         outer_eval_params={}, sweep_params=OrderedDict(), dependent_params={}, group_by=None, *, n_evals=100, n_batches=10, **kwargs):
+         outer_eval_params={}, sweep_params=OrderedDict(), dependent_params={}, group_by=None, *, n_evals=100, n_batches=10, dataset_params=None, **kwargs):
     print("Initialising")
     # create superdataset
     index = pd.DataFrame()
@@ -353,7 +359,7 @@ def random_search_main(outdir, individual_class, evaluate_inner, evaluate_outer,
         evaluate_inner(pop, batch, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         evaluate_outer(pop, basepath=outdir, gen=batch, **outer_eval_params)
 
-        update_superdataset(dataset, outdir, pop, batch, minimize_fitness)
+        update_superdataset(dataset, outdir, pop, batch, minimize_fitness, dataset_params=dataset_params)
         dataset.save()
 
 
@@ -363,7 +369,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
          starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True, 
-         random_search=False, **kwargs):
+         random_search=False, dataset_params=None, **kwargs):
 
     print("Initialising")
     main_check_args(individual_params, evolved_params, sweep_params, kwargs)
@@ -393,7 +399,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         info = {'command': ' '.join(map(shlex.quote, sys.argv)), }
         dataset = Dataset(index, None, info, basepath=outdir)
 
-        update_superdataset(dataset, outdir, pop, 0, minimize_fitness)
+        update_superdataset(dataset, outdir, pop, 0, minimize_fitness, dataset_params)
         dataset.save()
 
     gen_times = []
@@ -442,7 +448,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             pop.extend(mut_kids + crossover_kids)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
 
-        update_superdataset(dataset, outdir, pop, gen, minimize_fitness)
+        update_superdataset(dataset, outdir, pop, gen, minimize_fitness, dataset_params)
         dataset.save()
 
         if mutate_strategy and len(mut_kids) > 0:
@@ -466,7 +472,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         else:
             raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette' or 'tournament'")
 
-        assert len(pop) <= pop_size
+        assert len(pop) <= pop_size, f"pop size {len(pop)} > {pop_size}"
 
         best = save_stats(outdir, pop, minimize_fitness)
         print(f"best fitness: {best.fitness}")

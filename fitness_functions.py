@@ -14,6 +14,7 @@ import math
 from flatspin import plotting
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.grid import Grid
+from flatspin.utils import import_class
 
 
 import os
@@ -216,7 +217,7 @@ def target_state_num_fitness(pop, gen, outdir, target, state_step=None, **flatsp
     return pop
 
 @ignore_empty_pop
-def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspin_kwargs):
+def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=False, **flatspin_kwargs):
     shared_params = pop[0].get_default_shared_params(outdir, gen)
     shared_params.update(flatspin_kwargs)
     if num_angles > 1:
@@ -227,27 +228,31 @@ def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=True, **flatspi
     def fit_func(ds):
         # fitness is number of steps, but ignores steps from first fifth of the run
         steps = read_table(ds.tablefile("steps"))
-        fitn = (steps.iloc[-1]["steps"] - steps.iloc[(shared_params["spp"] * shared_params["periods"]) // 5]["steps"])
+        fitn = (steps.iloc[-1]["steps"] - steps.iloc[(shared_params.get("spp", 100) * shared_params["periods"]) // 5]["steps"])
         if percent:
             n_mags = len(id2indv[ds.index["indv_id"].values[0]].coords)
             fitn /= n_mags
         return fitn
 
+    
     def condition(indv):
-        return len(indv.coords) > 0
+        return True #len(indv.coords) > 0
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, shared_params=shared_params, condition=condition, **flatspin_kwargs)
     return pop
 
 
 def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=8, velo_values=5, min_steps=1,
-                zipf_coeff=50, entropy_coeff=50, **flatspin_kwargs):
+                zipf_coeff=-50, entropy_coeff=50, **flatspin_kwargs):
+    id2indv = {indv.id: indv for indv in pop}
 
     def fit_func(ds):
         stats = read_table(ds.tablefile("stats"))
         if int(stats.loc[1][1]) < min_steps:
             return np.nan
-        UV = load_output(ds, "mag", grid_size=grid_size, flatten=False)
+        indv = id2indv[ds.index["indv_id"].values[0]]
+        bases = [indv.basis0, indv.basis1]
+        UV = load_output(ds, "mag", grid_size=grid_size, grid_bases=bases, flatten=False)
         U = UV[..., 0]  # x components
         V = UV[..., 1]  # y components
 
@@ -258,10 +263,12 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
         norm_angle[norm_angle >= scale_size] = 0
 
         z_fitn = zipfness(norm_angle.flatten(), min_length=scale_size)
+        z_parts = 1
         # duration
         if dur_values > 1:
             counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values) 
             z_fitn += zipfness(counts=counts)
+            z_parts += 1
 
         # velocity
         if velo_values > 1:
@@ -269,15 +276,16 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
             # scale magnitudes to 0-magn_values and discretize
             magn = np.round(magn * velo_values / np.max(magn)).astype(int)
             z_fitn += zipfness(magn, min_length=velo_values)
+            z_parts += 1
 
+        z_fitn /= z_parts
+        
         # entropy
-        if entropy_coeff == 0:
-            entr_fitn = 0
-        else:
-            max_unique = np.min((np.prod(grid_size), scale_size**norm_angle.shape[0]))  # max number of unique rows in norm_angle
+        if entropy_coeff != 0:
+            max_unique = np.min((norm_angle.shape[0], scale_size**np.prod(grid_size)))  # max possible number of unique rows in norm_angle
             entr_fitn = entropy(norm_angle.reshape(-1, np.prod(grid_size)), base=max_unique)
-
-        return zipf_coeff * z_fitn + entropy_coeff * entr_fitn
+            return zipf_coeff * z_fitn, entropy_coeff * entr_fitn
+        return zipf_coeff * z_fitn
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, **flatspin_kwargs)
     return pop
@@ -1105,6 +1113,59 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
     )
     return pop
 
+@ignore_empty_pop
+def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, **flatspin_kwargs):
+    
+    def fit_func(ds):
+        nonlocal state_step, min_traj
+        if state_step is None:
+            state_step = 1 #ds.params["spp"]
+        spin = read_table(ds.tablefile("spin"))
+        spin = spin.iloc[::state_step, 1:]
+
+        if min_traj == "max":
+            my_min_traj = len(spin)
+        else:
+            my_min_traj = min_traj
+
+        fitn = 0
+
+        if my_min_traj: # if the trajectory is too short, return nan
+            fitn += (my_min_traj - len(np.unique(spin, axis=0))) * 1000 # penalize for not enough unique states 
+        
+    
+        spin = (spin == active_state).sum(axis=1) # count the number of active spins for each time step
+        target = spin[0]
+        fitn += np.sum(np.abs(spin - target))
+        
+        return fitn
+
+
+    #buffer
+    if buffer:
+        model = flatspin_kwargs.get("model", "PinwheelSpinIceDiamond")
+        model_obj = model_class = import_class(model, "flatspin.model")
+
+        kwargs = {k: flatspin_kwargs[k] for k in ("size", "hc") if k in flatspin_kwargs} # get the size and hc from flatspin_kwargs if they exist
+        asi = model_obj(**kwargs)
+        
+        hc = np.ones(asi.spin_count)
+        hc[asi.L[0, :]] = 100
+        hc[asi.L[-1, :]] = 100
+        hc[asi.L[:, 0]] = 100
+        hc[asi.L[:, -1]] = 100
+        hc *= asi.hc
+
+
+
+    flatspin_kwargs["hc"] = hc
+    
+    def condition(indv):
+        return np.any(np.greater(indv.genome, 0.5))
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    return pop
+
 
 known_fits={
     "target_state_num": target_state_num_fitness,
@@ -1128,4 +1189,5 @@ known_fits={
     "direction": directionality_fitness,
     "simple_flips": simple_flips_fitness,
     "music": music_fitness,
+    "constant_activity": constant_activity_fitness,
 }

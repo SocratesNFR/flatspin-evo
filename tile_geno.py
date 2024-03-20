@@ -12,7 +12,7 @@ import warnings
 from flatspin import plotting
 from shapely.geometry import box, MultiPolygon
 from shapely.affinity import rotate, translate
-from shapely    
+from shapely.prepared import prep 
 from itertools import count, permutations
 from functools import cached_property
 from copy import deepcopy, copy
@@ -189,7 +189,9 @@ class Individual(Base_Individual):
             iter_count += 1
             new_front = []
             for magnet in frontier:
+                curr_tile_idx = -1
                 for tile in self.tiles:
+                    curr_tile_idx += 1
                     new_mags = tile.apply_to_mag(magnet, iter_count)
 
                     for new_mag in new_mags:
@@ -198,6 +200,7 @@ class Individual(Base_Individual):
                             and not (self.pheno_bounds
                                      and not (-self.pheno_bounds[0] < new_mag.pos[0] < self.pheno_bounds[0]
                                               and -self.pheno_bounds[1] < new_mag.pos[1] < self.pheno_bounds[1])):
+                            new_mag._from_tile = curr_tile_idx
                             new_front.append(new_mag)
 
             frozen.extend(frontier)
@@ -575,7 +578,7 @@ class Individual(Base_Individual):
             coords = geom.iloc[slice(0, num_of_magnets)][["posx", "posy"]].values
             angles = geom.iloc[slice(0, num_of_magnets)]["angle"].values
             indv.pheno = [Magnet(0, pos, angle, mag_w, mag_h, created, padding) for pos, angle in zip(coords, angles)]
-            print(len(indv.pheno))
+            #print(len(indv.pheno))
             individuals.append(indv)
 
         return individuals

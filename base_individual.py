@@ -187,15 +187,15 @@ class Base_Individual(ABC):
 
         if len(pop) < 1:
             return pop
-        sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=flatspin_kwargs)) if sweep_params else [])
-        default_shared = cls.get_default_shared_params(outdir, gen)
 
+        default_shared = cls.get_default_shared_params(outdir, gen)
         if use_default_shared_params:
             shared_params = overwrite_default_params(default_shared, shared_params)
         elif shared_params is None:
             shared_params = {}
-
         shared_params.update(flatspin_kwargs)
+        
+        sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=shared_params)) if sweep_params else [])
 
         if run_params is None:
             run_params = cls.get_default_run_params(pop, sweep_list, condition=condition)
@@ -277,7 +277,7 @@ class Base_Individual(ABC):
                 )
             if dependent_params:
                 # get any dependent params in dependent_params and update run param with them
-                dp = eval_params(dependent_params, run_params)
+                dp = eval_params(dependent_params, {**run_params, **evolved_params[i]})
                 run_params.update(dp)
 
             sub_run_name = newparams.get("sub_run_name", "x")
