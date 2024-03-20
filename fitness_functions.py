@@ -1143,18 +1143,12 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
 
     #buffer
     if buffer:
-        model = flatspin_kwargs.get("model", "PinwheelSpinIceDiamond")
-        model_obj = model_class = import_class(model, "flatspin.model")
-
-        kwargs = {k: flatspin_kwargs[k] for k in ("size", "hc") if k in flatspin_kwargs} # get the size and hc from flatspin_kwargs if they exist
-        asi = model_obj(**kwargs)
-        
         hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
         
         hc[[0, -1], :] = 100
         hc[:, [0, -1]] = 100
 
-        hc *= asi.hc
+        hc *= flatspin_kwargs.get("hc", 0.2)
 
 
 
