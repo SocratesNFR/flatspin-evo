@@ -1149,11 +1149,11 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
         kwargs = {k: flatspin_kwargs[k] for k in ("size", "hc") if k in flatspin_kwargs} # get the size and hc from flatspin_kwargs if they exist
         asi = model_obj(**kwargs)
         
-        hc = np.ones(asi.spin_count)
-        hc[asi.L[0, :]] = 100
-        hc[asi.L[-1, :]] = 100
-        hc[asi.L[:, 0]] = 100
-        hc[asi.L[:, -1]] = 100
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4))
+        
+        hc[[0, -1], :] = 100
+        hc[:, [0, -1]] = 100
+
         hc *= asi.hc
 
 
