@@ -1113,7 +1113,23 @@ def target_order_percent_fitness(pop, gen, outdir, grid_size=4, threshold=0.5, c
     )
     return pop
 
+def scaling_param(func):
+    """decorator to set params that scale with generation number"""
+    @wraps(func)
+    def wrapper(pop, gen, *args, scale_param=None, sp_start_val=0, sp_end_val=100, sp_peak_at=100, **kwargs):
+        if scale_param is not None:
+            if scale_param in kwargs:
+                warnings.warn(f"param '{scale_param}' being overwritten as it is scaling param")
+            kwargs[scale_param] = sp_start_val + sp_end_val * np.clip(gen / sp_peak_at, 0, 1)
+
+        return func(pop, gen, *args, **kwargs)
+
+    return wrapper
+
+
+
 @ignore_empty_pop
+@scaling_param
 def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, **flatspin_kwargs):
     
     def fit_func(ds):
@@ -1153,6 +1169,7 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
 
 
     flatspin_kwargs["hc"] = hc
+    flatspin_kwargs["random_seed"] = gen # want seed to vary each generation, probably better way
     
     def condition(indv):
         return np.any(np.greater(indv.genome, 0.5))
