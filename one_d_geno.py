@@ -75,14 +75,13 @@ class Individual(Base_Individual):
         ignore_attributes = []
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-    
-    def from_string(string, keep_pheno=False, **overide_kwargs):
+    @classmethod
+    def from_string(cls, string, keep_pheno=False, **overide_kwargs):
         array = np.array
         kwargs = eval(string)
         kwargs.update(overide_kwargs)
 
-
-        return Individual(**kwargs)
+        return cls(**kwargs)
 
     def __repr__(self):
         ignored_attrs = ['pos', 'angle']
@@ -124,6 +123,9 @@ class Individual(Base_Individual):
                 run_params.append(dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params()))
         return run_params
 
+    @classmethod
+    def set_id_start(cls, start):
+        cls._id_counter = count(start)
 
     def genome2run_params(self):
         """

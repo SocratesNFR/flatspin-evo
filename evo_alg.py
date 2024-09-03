@@ -300,7 +300,8 @@ def setup_continue_run(outdir, individual_class, start_gen):
 
     # find the largest id in the dataset so we dont overwrite
     newest_index = read_csv(os.path.join(outdir, gen_string, "index.csv"))
-    max_id = max(newest_index["indv_id"].values)
+    super_index = read_csv(os.path.join(outdir, "index.csv"))
+    max_id = max(newest_index["indv_id"].values + super_index["indv_id"].values)
     individual_class.set_id_start(max_id + 1)
 
     return pop, dataset

@@ -8,12 +8,11 @@ import evo_alg as ea
 import fitness_functions
 
 class Individual(one_d_geno.Individual):
-    
     def __init__(self, *, index_map=None, spin_count=1, **kwargs):
         self.index_map = index_map or []
         self.spin_count = spin_count
         super().__init__(**kwargs)
-    
+
     def genome2run_params(self):
         rp = {}
         init_state = np.zeros(self.spin_count) - 1

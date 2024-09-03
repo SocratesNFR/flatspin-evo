@@ -1146,7 +1146,7 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
 
         fitn = 0
 
-        if my_min_traj: # if the trajectory is too short, return nan
+        if my_min_traj:
             fitn += (my_min_traj - len(np.unique(spin, axis=0))) * 1000 # penalize for not enough unique states 
         
     
