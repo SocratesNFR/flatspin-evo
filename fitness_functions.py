@@ -45,7 +45,7 @@ def flatspin_eval(fit_func, pop, *args, **kwargs):
 def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, safe=True, **kwargs):
     """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
-        if np.nan in i.fitness_components or None in i.fitness_components:
+        if i.fitness_components is None or np.nan in i.fitness_components or None in i.fitness_components:
             i.fitness = np.nan
         else:
             i.fitness = acc(i.fitness_components)
