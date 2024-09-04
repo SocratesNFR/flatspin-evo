@@ -1133,14 +1133,14 @@ def scaling_param(func):
 
 @ignore_empty_pop
 @scaling_param
-def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, **flatspin_kwargs):
+def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, burn_in=0, **flatspin_kwargs):
     
     def fit_func(ds):
         nonlocal state_step, min_traj
         if state_step is None:
             state_step = 1 #ds.params["spp"]
         spin = read_table(ds.tablefile("spin"))
-        spin = spin.iloc[::state_step, 1:]
+        spin = spin.iloc[burn_in::state_step, 1:]
 
         if min_traj == "max":
             my_min_traj = len(spin)
