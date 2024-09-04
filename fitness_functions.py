@@ -1133,7 +1133,7 @@ def scaling_param(func):
 
 @ignore_empty_pop
 @scaling_param
-def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, burn_in=0 **flatspin_kwargs):
+def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, burn_in=0, **flatspin_kwargs):
     
     def fit_func(ds):
         nonlocal state_step, min_traj
