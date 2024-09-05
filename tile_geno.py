@@ -152,8 +152,8 @@ class Individual(Base_Individual):
             new_indv.refresh()
         return new_indv
 
-    @staticmethod
-    def from_string(s, keep_pheno=False, **overides):
+    @classmethod
+    def from_string(cls, s, keep_pheno=False, **overides):
         array = np.array
         inf = np.inf
         params = eval(s)
@@ -162,7 +162,7 @@ class Individual(Base_Individual):
         if not params.get("fixed_geom", False):
             # Instanciate Magnets from result of repr
             params["tiles"] = [Tile(magnets=[Magnet(**mag) for mag in tile]) for tile in params["tiles"]]
-        indv = Individual(init_pheno=not keep_pheno, **params)
+        indv = cls(init_pheno=not keep_pheno, **params)
         if keep_pheno and "pheno" in params:
             indv.pheno = [Magnet(**mag) for mag in params["pheno"]]
         return indv

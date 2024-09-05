@@ -3,17 +3,11 @@ from joblib import Parallel
 from tqdm.auto import tqdm
 import logging
 import numpy as np
-
-from itertools import count
-
+import os
 
 import evo_alg as ea
 from base_individual import Base_Individual
 import fitness_functions
-
-
-
-import os
 
 
 class ProgressBar(tqdm):
@@ -31,24 +25,10 @@ class ParallelProgress(Parallel):
 
 
 class Individual(Base_Individual):
-    _id_counter = count(0)
 
-    def __init__(self, *, genome=None, min_len=1, max_len=1, id=None, gen=0, fitness=None, fitness_components=None, fitness_info=None,
-                parent_ids=None, **kwargs):
+    def __init__(self, *, genome=None, min_len=1, max_len=1, **kwargs):
 
-        self.id = id if id is not None else next(Individual._id_counter)
-        self.gen = gen  # generation of birth
-        
-        self.fitness = fitness
-        self.fitness_components = fitness_components
-        self.fitness_info = fitness_info
-
-        if parent_ids is None:
-            self.parent_ids = []
-        else:
-            self.parent_ids = parent_ids
-
-        self.init_evolved_params(**kwargs)
+        super().__init__(**kwargs)
 
         self.min_len = min_len
         self.max_len = max_len
@@ -57,37 +37,17 @@ class Individual(Base_Individual):
         if genome is None:
             length = self.min_len
             if self.max_len > self.min_len:
-                length = np.random.randint(self.min_len, self.max_len + 1) 
+                length = np.random.randint(self.min_len, self.max_len + 1)
             self.genome = random_range(0, 1, [length])
-        
-        
-    def refresh(self):        
-        self.clear_fitness()
 
-    def clear_fitness(self):
-        self.fitness = None
-        self.fitness_components = None
-        self.fitness_info = None
 
-    
     def __repr__(self):
         # defines which attributes are ignored by repr
         ignore_attributes = []
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-    @classmethod
-    def from_string(cls, string, keep_pheno=False, **overide_kwargs):
-        array = np.array
-        kwargs = eval(string)
-        kwargs.update(overide_kwargs)
 
-        return cls(**kwargs)
 
-    def __repr__(self):
-        ignored_attrs = ['pos', 'angle']
-        return repr({k: v for k, v in vars(self).items() if k not in ignored_attrs})
-
-    
     def copy(self, **override_kwargs):
         ignored_attrs = ['id', 'gen']
         params = {k: v for k, v in vars(self).items() if k not in ignored_attrs}

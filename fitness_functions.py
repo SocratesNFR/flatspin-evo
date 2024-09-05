@@ -42,13 +42,22 @@ def flatspin_eval(fit_func, pop, *args, **kwargs):
     type(pop[0]).flatspin_eval(fit_func, pop, *args, **kwargs)
 
 
-def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, safe=True, **kwargs):
+def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, safe=True, append_history=False,**kwargs):
     """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
-        if i.fitness_components is None or np.nan in i.fitness_components or None in i.fitness_components:
+        fit_comp = i.fitness_components
+        if fit_comp is None or np.nan in fit_comp or None in fit_comp:
             i.fitness = np.nan
-        else:
-            i.fitness = acc(i.fitness_components)
+            continue
+
+        if not append_history:
+            i.fitness =  acc(fit_comp)
+            continue
+
+        # accumulate the components first, then accumulate result with the previously stored fitnesses
+        i.push_fitness_history(acc(fit_comp))
+        i.fitness =  acc(i.fitness_history)
+
 
 def ignore_NaN_fits(func):
     """decorator to set individuals with nan in their fitness components to have nan fitness,

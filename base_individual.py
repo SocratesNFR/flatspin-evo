@@ -6,9 +6,10 @@ import warnings
 from copy import copy, deepcopy
 import shlex
 import sys
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from time import sleep
 import pandas as pd
+from itertools import count
 
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.utils import get_default_params, import_class
@@ -29,12 +30,40 @@ class Base_Individual(ABC):
     fitness_info: List
 
     _evolved_params = {}
+    _id_counter = count(0)
+
+    def __init__(self, *, id=None, gen=0, fitness=None, fitness_components=None, fitness_info=None,
+                parent_ids=None, evolved_params_values=None, remember_fitness=0, fitness_history=None,
+                **kwargs):
+
+        self.id = id if id is not None else next(Base_Individual._id_counter)
+        self.gen = gen  # generation of birth
+
+        self.fitness = fitness
+        self.fitness_components = fitness_components
+        self.fitness_info = fitness_info
+
+        if parent_ids is None:
+            self.parent_ids = []
+        else:
+            self.parent_ids = parent_ids
+
+        self.remember_fitness = remember_fitness
+        if fitness_history is None and remember_fitness > 0:
+            self.fitness_history = deque(maxlen=remember_fitness)
+        else:
+            self.fitness_history = fitness_history
+
+        self.init_evolved_params(evolved_params_values)
+
+
 
     @classmethod
     def set_evolved_params(cls, evolved_params):
         cls._evolved_params = evolved_params
 
-    def init_evolved_params(self, evolved_params_values=None, **kwargs):
+
+    def init_evolved_params(self, evolved_params_values=None):
 
         self.evolved_params_values = (evolved_params_values if evolved_params_values else {})
         if any((ep not in self._evolved_params for ep in self.evolved_params_values)):
@@ -49,19 +78,19 @@ class Base_Individual(ABC):
                     self._evolved_params[param].get("shape"),
                 )
 
-    @property
-    @abstractmethod
-    def coords(self) -> np.ndarray:
-        """
-        :return: the coordinates of the individual's magnets
-        """
 
-    @property
-    @abstractmethod
-    def angles(self) -> np.ndarray:
-        """
-        :return: the angles of the individual's magnets
-        """
+    def refresh(self):
+        self.clear_fitness()
+
+
+    def clear_fitness(self):
+        self.fitness = None
+        self.fitness_components = None
+        self.fitness_info = None
+
+        self.fitness_history = deque(maxlen=self.remember_fitness) if self.remember_fitness > 0 else None
+
+
 
     @abstractmethod
     def mutate(self, strength):
@@ -113,12 +142,17 @@ class Base_Individual(ABC):
 
         return res_info
 
-    @abstractmethod
-    def from_string(string):
-        """
-        :param string: a string representation of the individual
-        :return: an individual from the string
-        """
+    @classmethod
+    def from_string(cls, string, **overide_kwargs):
+        array = np.array
+        kwargs = eval(string)
+        kwargs.update(overide_kwargs)
+
+        return cls(**kwargs)
+
+    def push_fitness_history(self, fitness):
+        self.fitness_history.appendleft(fitness)
+
 
     @staticmethod
     def get_default_shared_params(outdir="", gen=None, select_param=None):
@@ -358,6 +392,8 @@ def get_ds_indv_id(ds):
     unique = ds.index["indv_id"].unique()
     assert len(unique) == 1, "Dataset contains multiple individuals: {}".format(unique)
     return unique[0]
+
+
 
 
 def calculate_fitness(ds, fit_func):
