@@ -77,7 +77,7 @@ class Individual(Base_Individual):
         id2indv = {individual.id: individual for individual in [p for p in pop if condition is None or condition(p)]}
 
         run_params = []
-        
+
         for id, indv in id2indv.items():
             for i, j, rp in sweep_list:
                 run_params.append(dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params()))
@@ -93,7 +93,7 @@ class Individual(Base_Individual):
         return a dictionary of run_params
         """
         return {}
-    
+
     @property
     def coords(self) -> np.ndarray:
         return None
@@ -102,7 +102,7 @@ class Individual(Base_Individual):
     def angles(self) -> np.ndarray:
         return None
 
-    
+
     # ====================  Mutation and Crossover  ====================
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
@@ -126,8 +126,8 @@ class Individual(Base_Individual):
         child.genome[indx] = np.random.normal(child.genome[indx], strength)
         child.genome[indx] = np.clip(child.genome[indx], floor, ceiling)
 
-    
-    
+
+
     def crossover(self, other):
         child1 = self.copy(parent_ids=[self.id, other.id])
         child2 = self.copy(parent_ids=[self.id, other.id])
@@ -135,7 +135,7 @@ class Individual(Base_Individual):
         child1.refresh()
         child2.refresh()
         return [child1, child2]
-    
+
     @classmethod
     def point_crossover(cls, child1, child2):
         if len (child1.genome) == 1 and len(child2.genome) == 1:

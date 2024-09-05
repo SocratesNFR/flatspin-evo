@@ -228,7 +228,7 @@ class Base_Individual(ABC):
         elif shared_params is None:
             shared_params = {}
         shared_params.update(flatspin_kwargs)
-        
+
         sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=shared_params)) if sweep_params else [])
 
         if run_params is None:

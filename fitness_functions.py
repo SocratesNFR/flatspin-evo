@@ -246,7 +246,7 @@ def simple_flips_fitness(pop, gen, outdir, num_angles=1, percent=False, **flatsp
             fitn /= n_mags
         return fitn
 
-    
+
     def condition(indv):
         return True #len(indv.coords) > 0
 
@@ -278,7 +278,7 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
         z_parts = 1
         # duration
         if dur_values > 1:
-            counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values) 
+            counts = consecutive_num_distribution(norm_angle.reshape(-1, np.prod(grid_size)), max_consec=dur_values)
             z_fitn += zipfness(counts=counts)
             z_parts += 1
 
@@ -291,7 +291,7 @@ def music_fitness(pop, gen, outdir, grid_size=(3, 3), scale_size=12, dur_values=
             z_parts += 1
 
         z_fitn /= z_parts
-        
+
         # entropy
         if entropy_coeff != 0:
             max_unique = np.min((norm_angle.shape[0], scale_size**np.prod(grid_size)))  # max possible number of unique rows in norm_angle
@@ -1143,7 +1143,7 @@ def scaling_param(func):
 @ignore_empty_pop
 @scaling_param
 def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None, min_traj=None, buffer=True, burn_in=0, **flatspin_kwargs):
-    
+
     def fit_func(ds):
         nonlocal state_step, min_traj
         if state_step is None:
@@ -1159,21 +1159,21 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
         fitn = 0
 
         if my_min_traj:
-            penalty = spin.shape[1] # penalty is eqaul to number of spins + 1 
-            fitn += (my_min_traj - len(np.unique(spin, axis=0))) * penalty # penalize for not enough unique states 
-        
-    
+            penalty = spin.shape[1] # penalty is eqaul to number of spins + 1
+            fitn += (my_min_traj - len(np.unique(spin, axis=0))) * penalty # penalize for not enough unique states
+
+
         spin = (spin == active_state).sum(axis=1) # count the number of active spins for each time step
         target = spin.iloc[0]
         fitn += np.sum(np.abs(spin - target))
-        
+
         return fitn
 
 
     #buffer
     if buffer:
         hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
-        
+
         hc[[0, -1], :] = 100
         hc[:, [0, -1]] = 100
 
@@ -1183,7 +1183,7 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
 
     flatspin_kwargs["hc"] = hc
     flatspin_kwargs["random_seed"] = gen # want seed to vary each generation, probably better way
-    
+
     def condition(indv):
         return np.any(np.greater(indv.genome, 0.5))
 
