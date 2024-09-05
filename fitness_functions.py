@@ -46,8 +46,9 @@ def evaluate_outer(outer_pop, basepath, *, max_age=0, acc=np.sum, safe=True, app
     """uses given accumulator func to reduce the fitness components to one value"""
     for i in outer_pop:
         fit_comp = i.fitness_components
-        if fit_comp is None or np.nan in fit_comp or None in fit_comp:
+        if safe and (fit_comp is None or np.nan in fit_comp or None in fit_comp):
             i.fitness = np.nan
+            warnings.warn(f"NaN fitness component encountered in individual {i.id}. Setting fitness to NaN.")
             continue
 
         if not append_history:
