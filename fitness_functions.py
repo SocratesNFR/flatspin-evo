@@ -1150,7 +1150,8 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
         fitn = 0
 
         if my_min_traj:
-            fitn += (my_min_traj - len(np.unique(spin, axis=0))) * 1000 # penalize for not enough unique states 
+            penalty = spin.shape[1] # penalty is eqaul to number of spins + 1 
+            fitn += (my_min_traj - len(np.unique(spin, axis=0))) * penalty # penalize for not enough unique states 
         
     
         spin = (spin == active_state).sum(axis=1) # count the number of active spins for each time step
