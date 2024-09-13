@@ -1192,6 +1192,92 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
     return pop
 
 
+@ignore_empty_pop
+@scaling_param
+def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, tessellate=None, polar=True,**flatspin_kwargs):
+
+    if tessellate:
+        total_spinices = np.prod(tessellate)
+        flatspin_kwargs["tessellate"] = tessellate
+    else:
+        total_spinices = -1
+        tessellate = (1, 1)
+
+    def fit_func(ds):
+        nonlocal state_step
+        if state_step is None:
+            state_step = 1 #ds.params["spp"]
+        spin = read_table(ds.tablefile("spin"))
+        spin = spin.iloc[burn_in::state_step, 1:]
+
+        gs, us = [], []
+        # loop over grid of spin ices
+        for x in range(tessellate[0]):
+            for y in range(tessellate[1]):
+                if total_spinices != -1:
+                    spin_xy=spin[match_column(f"spin({x},{y},*)", spin)] # spins for this spin ice
+
+                T = len(spin_xy)
+                N = spin_xy.shape[1]
+                u = len(np.unique(spin_xy, axis=0))
+
+                active = (spin_xy == active_state).sum(axis=1) # count the number of active spins for each time step
+                target = active.iloc[0]
+                g = np.abs(np.mean(active) - target)
+
+                # normalise u and g to [0, 1]
+                u = (u - 1) / (T - 1)
+                g = g / N
+
+                gs.append(g)
+                us.append(u)
+
+        d = 1 - 2 * max(np.std(gs), np.std(us))
+        fitn = (np.mean(gs), np.mean(us), d)
+
+        if polar:
+            theta = fitn[0] * np.pi/2
+            phi = fitn[1] * np.pi/2
+            r = fitn[2]
+            fx = r * np.sin(theta) * np.cos(phi)
+            fy = r * np.sin(theta) * np.sin(phi)
+            fz = r * np.cos(theta)
+            fitn = (fx, fy, fz)
+        return fitn
+
+    def preprocessing(run_params):
+        if total_spinices > 1:
+            for rp in run_params:
+                rp["init"] = np.tile(rp["init"], total_spinices) # repeat the initial spin state for each spin ice
+        return run_params
+
+    #buffer
+    if buffer:
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+
+        hc[[0, -1], :] = 100
+        hc[:, [0, -1]] = 100
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+
+        if total_spinices > 1:
+            import importlib
+            m = importlib.import_module("flatspin.model")
+            model = getattr(m, flatspin_kwargs.get("model", "PinwheelSpinIceDiamond"))
+            model_kwargs = {"hc": hc, "tessellate": None, "disorder": 0, "size": flatspin_kwargs.get("size", None)}
+            si = model(**model_kwargs)
+            tess_hc = si.threshold
+            tess_hc = np.tile(tess_hc, total_spinices) # repeat the thresholds for each spin ice
+            hc = tess_hc
+
+        flatspin_kwargs["hc"] = hc
+
+
+    def condition(indv):
+        return np.any(np.greater(indv.genome, 0.5))
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, preprocessing=preprocessing, **flatspin_kwargs)
+    return pop
 known_fits={
     "target_state_num": target_state_num_fitness,
     "state_num": state_num_fitness,
@@ -1215,4 +1301,5 @@ known_fits={
     "simple_flips": simple_flips_fitness,
     "music": music_fitness,
     "constant_activity": constant_activity_fitness,
+    "constant_activity_3d": constant_activity_3d_fitness,
 }
