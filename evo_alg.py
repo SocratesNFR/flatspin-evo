@@ -192,7 +192,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True, datase
             ind.insert(2, 'fitness', indv.fitness)
             ind.insert(3, 'best', int(indv == best))
             for i, param in enumerate(dataset_params):
-                ind.insert(4 + i, param, [getattr(indv, param)])
+                ind.insert(4 + i, param, [getattr(indv, param)] * len(ds.index))  #  multiply for when group-by causes copied rows
 
             # patch outdir
             ind['outdir'] = ind['outdir'].apply(lambda o: os.path.join(f"gen{indv.gen}", o))

@@ -1203,34 +1203,37 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
         total_spinices = -1
         tessellate = (1, 1)
 
-    def fit_func(ds):
+    def fit_func(dss):
         nonlocal state_step
         if state_step is None:
             state_step = 1 #ds.params["spp"]
-        spin = read_table(ds.tablefile("spin"))
-        spin = spin.iloc[burn_in::state_step, 1:]
+        for ds in dss:
+            spin = read_table(ds.tablefile("spin"))
+            spin = spin.iloc[burn_in::state_step, 1:]
 
-        gs, us = [], []
-        # loop over grid of spin ices
-        for x in range(tessellate[0]):
-            for y in range(tessellate[1]):
-                if total_spinices != -1:
-                    spin_xy=spin[match_column(f"spin({x},{y},*)", spin)] # spins for this spin ice
+            gs, us = [], []
+            # loop over grid of spin ices
+            for x in range(tessellate[0]):
+                for y in range(tessellate[1]):
+                    if total_spinices != -1:
+                        spin_xy=spin[match_column(f"spin({x},{y},*)", spin)] # spins for this spin ice
+                    else:
+                        spin_xy = spin
 
-                T = len(spin_xy)
-                N = spin_xy.shape[1]
-                u = len(np.unique(spin_xy, axis=0))
+                    T = len(spin_xy)
+                    N = spin_xy.shape[1]
+                    u = len(np.unique(spin_xy, axis=0))
 
-                active = (spin_xy == active_state).sum(axis=1) # count the number of active spins for each time step
-                target = active.iloc[0]
-                g = np.abs(np.mean(active) - target)
+                    active = (spin_xy == active_state).sum(axis=1) # count the number of active spins for each time step
+                    target = active.iloc[0]
+                    g = np.abs(np.mean(active) - target)
 
-                # normalise u and g to [0, 1]
-                u = (u - 1) / (T - 1)
-                g = g / N
+                    # normalise u and g to [0, 1]
+                    u = (u - 1) / (T - 1)
+                    g = g / N
 
-                gs.append(g)
-                us.append(u)
+                    gs.append(g)
+                    us.append(u)
 
         d = 1 - 2 * max(np.std(gs), np.std(us))
         fitn = (np.mean(gs), np.mean(us), d)
