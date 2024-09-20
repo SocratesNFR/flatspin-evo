@@ -14,10 +14,7 @@ import sys
 
 from warnings import warn
 
-from flatspin.runner import run, run_dist, run_local
-from flatspin.data import Dataset, is_archive_format, read_csv
-from flatspin.utils import get_default_params, import_class
-from flatspin.sweep import sweep
+from flatspin.data import Dataset, read_csv
 
 import pickle as pkl
 

@@ -1207,11 +1207,11 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
         nonlocal state_step
         if state_step is None:
             state_step = 1 #ds.params["spp"]
+        gs, us = [], []
         for ds in dss:
             spin = read_table(ds.tablefile("spin"))
             spin = spin.iloc[burn_in::state_step, 1:]
 
-            gs, us = [], []
             # loop over grid of spin ices
             for x in range(tessellate[0]):
                 for y in range(tessellate[1]):
@@ -1234,7 +1234,6 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
 
                     gs.append(g)
                     us.append(u)
-
         d = 1 - 2 * max(np.std(gs), np.std(us))
         fitn = (np.mean(gs), np.mean(us), d)
 
