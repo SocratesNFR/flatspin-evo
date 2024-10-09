@@ -106,7 +106,8 @@ class Individual(Base_Individual):
     # ====================  Mutation and Crossover  ====================
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
-        mutations = [Individual.point_mutate]
+        mutations = [Individual.point_mutate, Individual.full_mutate]
+        mutations = [Individual.full_mutate]
 
 
         weights = [1] * len(mutations)
@@ -125,6 +126,12 @@ class Individual(Base_Individual):
         indx = np.random.randint(0, len(child.genome))
         child.genome[indx] = np.random.normal(child.genome[indx], strength)
         child.genome[indx] = np.clip(child.genome[indx], floor, ceiling)
+
+    @classmethod
+    def full_mutate(cls, child, strength=1, floor=0, ceiling=1):
+        strength /= 100
+        child.genome = np.random.normal(child.genome, strength)
+        child.genome = np.clip(child.genome, floor, ceiling)
 
 
 
