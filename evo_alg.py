@@ -253,7 +253,7 @@ def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True, datase
             copy_row = ind[ind["indv_id"] == indv.id].iloc[:1].copy() # copy the row, use :1 range to keep as dataframe
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
-            copy_row["best"] = int(indv == best)            
+            copy_row["best"] = int(indv == best)
             #dataset.index = ind.append(copy_row, ignore_index=True)
             dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
         else:
@@ -440,7 +440,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          pop_size=100, generation_num=100, mut_prob=0.2, cx_prob=0.3,
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
-         stop_at_fitness=None, group_by=None,
+         stop_at_fitness=None, group_by=None, select_randomise_order=False,
          starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True,
          random_search=False, dataset_params=None, **kwargs):
 
@@ -543,7 +543,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
         elif select == "tournament":
             pop = tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness)
         elif select == "multi_tourn":
-            pop = multi_tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness)
+            pop = multi_tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness, randomise_order=select_randomise_order)
         else:
             raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette', 'tournament' or 'multi_tourn'")
 
