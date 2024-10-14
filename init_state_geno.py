@@ -20,10 +20,10 @@ class Individual(one_d_geno.Individual):
     def genome2run_params(self, outdir):
         rp = {}
         init_state = np.zeros(self.spin_count) - 1
-        init_state[self.index_map] += 2 * np.greater(self.genome, 0.5)
+        bin_genome = np.greater(self.genome, 0.5).astype(int)
+        init_state[self.index_map] += 2 * bin_genome
 
-        bin_state = (0.5 - 0.5* init_state).astype(int) # [-1.0, 1.0] -> [0, 1]
-        zip_code = "".join(bin_state.astype(str))
+        zip_code = "".join(bin_genome.astype(str))
         zip_code = binstring2b64(zip_code)
 
         dir = path.join(outdir, "init")
