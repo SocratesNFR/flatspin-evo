@@ -70,10 +70,10 @@ def nan_select_filter(func):
         nan_pop, fin_pop = [], []
         for indv in pop:
             (fin_pop if np.isfinite(indv.fitness) else nan_pop).append(indv)
-        
+
         if fin_pop:
             pop = func(fin_pop, pop_size, *args, **kwargs)
-        else: 
+        else:
             pop = []
 
         if len(pop) < pop_size:
@@ -120,6 +120,81 @@ def tournament_select(pop, pop_size, tournament_size=7, elitism=False, minimize_
             pop.remove(best)
     return new_pop
 
+def do_tournament_multi(tourn_pop, tourn_size, n_components, minimize_fit, randomize_order):
+    # len(tourn_pop) should be n_components**tourn_size, pad with Nones
+    comps = range(n_components)
+    if randomize_order:
+        comps = list(comps)
+        np.random.shuffle(comps)
+
+    losers = []
+    for comp in comps:
+        victors =[]
+        for i in range(0, len(tourn_pop), tourn_size):
+            tournament = tourn_pop[i:i+tourn_size]
+            best, rest = winner(tournament, minimize_fit, comp)
+            losers += rest
+            victors.append(best)
+        tourn_pop = victors
+
+    assert len(victors) == 1
+    return victors[0], losers
+
+def winner(indvs, minimize_fit, component):
+    # correctly accepts Nones, but doesn't return any as losers, only as a winner if all None
+    tourn = [i for i in indvs if i!=None]
+    if len(tourn) ==0:
+        return indvs[0], []
+
+    agg = min if minimize_fit else max
+    idxs = list(range(len(tourn)))
+    best_i = agg(idxs, key=lambda i: tourn[i].fitness_components[component])
+
+    return tourn[best_i], tourn[:best_i] + tourn[best_i+1:]
+
+
+@nan_select_filter
+def multi_tournament_select(pop, pop_size, tournament_size=2, elitism=False, minimize_fit=True, randomise_order=False, num_select_objectives=None):
+    if elitism:
+        warn("elitism is undefined for multi-object tournament, has no effect")
+
+    if num_select_objectives is None:
+        num_select_objectives = len(pop[0].fitness_components)
+    if len(pop) < pop_size:
+        return pop
+
+    pop = pop.copy()
+    new_pop = []
+    rejects = []
+
+    full_tournament_size = tournament_size**num_select_objectives
+    while len(new_pop) < pop_size:
+        tournament = try_choice(pop, full_tournament_size, pad=True, replace=False)
+        best, rest = do_tournament_multi(tournament, tournament_size, num_select_objectives, minimize_fit, randomise_order)
+
+        pop.remove(best) # remove the best n rest
+        pop = [p for p in pop if p not in rest]
+
+        new_pop.append(best)
+        rejects += rest
+        if len(pop)==0:
+            np.random.shuffle(rejects)
+            pop, rejects = rejects, pop
+
+
+
+    return new_pop
+
+def try_choice(arr, size, pad=False, replace=False):
+    s = size
+    if not replace:
+        s = min(s, len(arr))
+    chosen = np.random.choice(arr, s, replace=replace)
+
+    if pad and  s < size:
+        chosen = np.concatenate((chosen, [None] * (size - s)))
+
+    return chosen
 
 def parse_file(filename):
     with open(filename) as f:
@@ -366,7 +441,7 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
          mut_strength=1, reval_inner=False, elitism=False, individual_params={},
          outer_eval_params={}, evolved_params={}, sweep_params=OrderedDict(), dependent_params={},
          stop_at_fitness=None, group_by=None,
-         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True, 
+         starting_pop=None, continue_run=False, starting_gen=1, select="best", mutate_strategy=0, keep_parents=True,
          random_search=False, dataset_params=None, **kwargs):
 
     print("Initialising")
@@ -467,8 +542,10 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             pop = roulette_select(pop, pop_size, elitism, minimize_fitness)
         elif select == "tournament":
             pop = tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness)
+        elif select == "multi_tourn":
+            pop = multi_tournament_select(pop, pop_size, elitism=elitism, minimize_fit=minimize_fitness)
         else:
-            raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette' or 'tournament'")
+            raise ValueError(f"select '{select}' not recognised, choose from 'best', 'roulette', 'tournament' or 'multi_tourn'")
 
         assert len(pop) <= pop_size, f"pop size {len(pop)} > {pop_size}"
 
