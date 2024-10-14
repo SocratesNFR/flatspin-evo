@@ -2,10 +2,14 @@ import numpy as np
 import logging
 import os
 import sys
+import base64
+import zlib
 
 import one_d_geno
 import evo_alg as ea
 import fitness_functions
+from flatspin.data import save_table
+from os import path
 
 class Individual(one_d_geno.Individual):
     def __init__(self, *, index_map=None, spin_count=1, **kwargs):
@@ -13,13 +17,49 @@ class Individual(one_d_geno.Individual):
         self.spin_count = spin_count
         super().__init__(**kwargs)
 
-    def genome2run_params(self):
+    def genome2run_params(self, outdir):
         rp = {}
         init_state = np.zeros(self.spin_count) - 1
         init_state[self.index_map] += 2 * np.greater(self.genome, 0.5)
-        rp["init"] = init_state
+
+        bin_state = (0.5 - 0.5* init_state).astype(int) # [-1.0, 1.0] -> [0, 1]
+        zip_code = "".join(bin_state.astype(str))
+        zip_code = binstring2b64(zip_code)
+
+        dir = path.join(outdir, "init")
+        fn = path.join(dir, f"init[{zip_code}].csv")
+        rp["init"] = fn
+
+        if not os.path.exists(fn):
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+            save_table(init_state, fn)
 
         return rp
+
+    @staticmethod
+    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
+        sweep_list = sweep_list or [[0, 0, {}]]
+
+        id2indv = {individual.id: individual for individual in [p for p in pop if condition is None or condition(p)]}
+
+        run_params = []
+
+        for id, indv in id2indv.items():
+            for i, j, rp in sweep_list:
+                run_params.append(dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params(outdir)))
+        return run_params
+
+
+def bitstring_to_bytes(s):
+    return int(s, 2).to_bytes((len(s) + 7) // 8, byteorder='big')
+
+def binstring2b64(bs):
+    return base64.urlsafe_b64encode(zlib.compress(bitstring_to_bytes(bs)))
+
+def b642binstring(str64,length=8):
+    return format(int.from_bytes(zlib.decompress(base64.urlsafe_b64decode(str64))), f"0{length}b")
+
 
 def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, calculate_fit_only=False, **kwargs):
     known_fits = {

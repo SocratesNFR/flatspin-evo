@@ -102,7 +102,7 @@ class Individual(Base_Individual):
 
     @property
     def lattice_shape(self):
-        """Returns the lattice shape, increasing it if necessary to satisfy the minimum number of magnets."""  
+        """Returns the lattice shape, increasing it if necessary to satisfy the minimum number of magnets."""
         if self.min_magnets is None:
             return self._lattice_shape
 
@@ -453,7 +453,7 @@ class Individual(Base_Individual):
         return default_params
 
     @staticmethod
-    def get_default_run_params(pop, sweep_list=None, *, condition=None):
+    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
         sweep_list = sweep_list or [[0, 0, {}]]
 
         id2indv = {individual.id: individual for individual in [p for p in pop if condition is None or condition(p)]}

@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import os
 
+
 import evo_alg as ea
 from base_individual import Base_Individual
 import fitness_functions
@@ -71,7 +72,7 @@ class Individual(Base_Individual):
         return default_params
 
     @staticmethod
-    def get_default_run_params(pop, sweep_list=None, *, condition=None):
+    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
         sweep_list = sweep_list or [[0, 0, {}]]
 
         id2indv = {individual.id: individual for individual in [p for p in pop if condition is None or condition(p)]}

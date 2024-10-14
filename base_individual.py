@@ -171,7 +171,7 @@ class Base_Individual(ABC):
         return default_params
 
     @staticmethod
-    def get_default_run_params(pop, sweep_list=None, *, condition=None):
+    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
         sweep_list = sweep_list or [[0, 0, {}]]
 
         if not condition:
@@ -232,7 +232,7 @@ class Base_Individual(ABC):
         sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=shared_params)) if sweep_params else [])
 
         if run_params is None:
-            run_params = cls.get_default_run_params(pop, sweep_list, condition=condition)
+            run_params = cls.get_default_run_params(pop, sweep_list, condition=condition, outdir=outdir)
 
         if preprocessing:
             run_params = preprocessing(run_params)
