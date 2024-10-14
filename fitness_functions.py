@@ -1194,7 +1194,7 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
 
 @ignore_empty_pop
 @scaling_param
-def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, tessellate=None, polar=True,**flatspin_kwargs):
+def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, tessellate=None, polar=True, weight_componenets=False, **flatspin_kwargs):
 
     if tessellate:
         total_spinices = np.prod(tessellate)
@@ -1236,6 +1236,9 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
                     us.append(u)
         d = 1 - 2 * max(np.std(gs), np.std(us))
         fitn = (np.mean(gs), np.mean(us), d)
+
+        if weight_componenets:
+            fitn = (-fitn[0], fitn[1], fitn[2])
 
         if polar:
             theta = fitn[0] * np.pi/2
