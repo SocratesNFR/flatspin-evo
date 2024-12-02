@@ -55,9 +55,11 @@ class Individual(one_d_geno.Individual):
         return rp
 
     @property
-    def as_ASI(self):
-        return TileLatticeSpinIce(basis0=self.basis0, basis1=self.basis1, angle_tile=self.angle_tile, hole_tile=self.hole_tile,
-                size=self.flatspin_size, radians=True)
+    def as_ASI(self, **kwargs):
+        default_kwargs = dict(basis0=self.basis0, basis1=self.basis1, angle_tile=self.angle_tile, hole_tile=self.hole_tile,
+                                size=self.flatspin_size, radians=True)
+        default_kwargs.update(kwargs)
+        return TileLatticeSpinIce(**default_kwargs)
 
 
     def plot(self, **kwargs):
