@@ -885,6 +885,36 @@ def directionality_fitness(pop, gen, outdir, tessellate_shape=(8, 8), pad=80, **
                         shared_params=shared_params, preprocessing=preprocessing, **flatspin_kwargs)
     return pop
 
+def influence_fitness(pop, gen, outdir, **flatspin_kwargs):
+    from flatlab.evotile.fitness import fitness_influence_dir, fitness_influence_abs
+    id2indv={individual.id: individual for individual in pop}
+
+    def do_fit_func(id):
+        indv=id2indv[id]
+        model = indv.as_ASI(**flatspin_kwargs)
+        inf_dir = fitness_influence_dir(model)
+        inf_abs = fitness_influence_abs(model)
+        return [inf_dir, inf_abs]
+
+
+    id2fit={}
+    progress_bar=ProgressBar(desc="calc fitness", total=len(id2indv))
+    parallel=ParallelProgress(progress_bar, n_jobs=-1)
+
+    def helper(id):
+        fit = do_fit_func(id)
+        return id, fit
+
+    id2fit.update(parallel(delayed(helper)(id) for id in id2indv))
+    progress_bar.close()
+
+    def fit_func(ds):
+        return id2fit[ds.index["indv_id"].values[0]]
+
+    pop=flatspin_eval(fit_func, pop, gen, outdir, dont_run=True, **flatspin_kwargs)
+    return pop
+
+
 
 def smile_fitness(pop, gen, outdir, min_mags=100, **flatspin_kwargs):
     def is_in_smiley(xy):
