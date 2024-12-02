@@ -1361,4 +1361,5 @@ known_fits={
     "music": music_fitness,
     "constant_activity": constant_activity_fitness,
     "constant_activity_3d": constant_activity_3d_fitness,
+    "influence": influence_fitness,
 }
