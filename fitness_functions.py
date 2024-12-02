@@ -79,43 +79,67 @@ def ignore_NaN_fits(func):
 
 
 @ignore_NaN_fits
-def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=False, plot_bounds=None, gen=0, **kwargs):
+def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=False, plot_bounds=None, gen=0, auto_normalise=False, **kwargs):
     from scipy.spatial import cKDTree
-    import matplotlib
 
-    novelty_file = os.path.join(basepath, "noveltyTree.pkl")
+    novelty_file = os.path.join(basepath, "noveltyData.pkl")
+    scale_file = os.path.join(basepath, "noveltyScales.pkl")
+
     pop_fitness_components = [indv.fitness_components for indv in outer_pop]
     new_pop_fitness_components = [indv.fitness_components for indv in outer_pop if indv.gen >= gen]
-    # if no novelty tree exists, create one and give individuals fitness = 0
-    if not os.path.exists(novelty_file):
-        kdTree = cKDTree(pop_fitness_components)
-        for indv in outer_pop:
-            indv.fitness = 0
+
+    if auto_normalise and os.path.exists(scale_file):
+        with open(scale_file, "rb") as f:
+            scale_factors = pkl.load(f)
     else:
-        # use the novelty tree to find the fitness, then update and save the new tree
+        scale_factors = np.ones(len(pop_fitness_components[0]))
+
+    # Load unscaled data if novelty file exists
+    if not os.path.exists(novelty_file):
+        # If no novelty file make data and give all fitness 0
+        unscaled_data = np.array(new_pop_fitness_components)
+        kdFitness = [0] * len(outer_pop)
+
+    else:
         with open(novelty_file, "rb") as f:
-            kdTree = pkl.load(f)
-        kdFitness = kdTree.query(pop_fitness_components, k=kNeigbours)[0].mean(axis=1)
-        for indv, fit in zip(outer_pop, kdFitness):
-            indv.fitness = fit
-        # add new individuals to the tree (don't re-add old individuals)
-        if len(new_pop_fitness_components) > 0:
-            kdTree = cKDTree(np.vstack((kdTree.data, new_pop_fitness_components)))
+            unscaled_data = pkl.load(f)
+
+        data = unscaled_data * scale_factors
+        kdTree = cKDTree(data)
+
+        kdFitness = kdTree.query(pop_fitness_components * scale_factors, k=kNeigbours)[0].mean(axis=1)
+        unscaled_data = np.vstack((unscaled_data, new_pop_fitness_components))
+
+    for indv, fit in zip(outer_pop, kdFitness):
+        indv.fitness = fit
+
+    if auto_normalise:
+        scale_factors = unscaled_data.max(axis=0) - unscaled_data.min(axis=0)
+        scale_factors[scale_factors == 0] = 1  # Avoid zero-range dimensions
+        with open(scale_file, "wb") as f:
+            pkl.dump(scale_factors, f)
 
     with open(novelty_file, "wb") as f:
-        pkl.dump(kdTree, f)
+        pkl.dump(unscaled_data, f)
 
     if plot and len(new_pop_fitness_components) > 0:
-        matplotlib.use('Agg')
-        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-        ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "o", color=[1, 0, 0, .1])
-        fit_comp_array = np.array(new_pop_fitness_components)
-        ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "o", color=[0, 0, 1, .7])
-        if plot_bounds is not None:
-            ax.set_xlim(plot_bounds[0])
-            ax.set_ylim(plot_bounds[1])
-        plt.savefig(os.path.join(basepath, f"novelty{gen}.png"))
-        plt.close(fig)
+        plot_novelty(kdTree, basepath, gen, new_pop_fitness_components, plot_bounds)
+
+
+def plot_novelty(kdTree, basepath, gen, new_pop_fitness_components, plot_bounds):
+    import matplotlib
+    matplotlib.use('Agg')
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    ax.plot(kdTree.data[:, 0], kdTree.data[:, 1], "o", color=[1, 0, 0, .1])
+    fit_comp_array = np.array(new_pop_fitness_components)
+    ax.plot(fit_comp_array[:, 0], fit_comp_array[:, 1], "o", color=[0, 0, 1, .7])
+    if plot_bounds is not None:
+        ax.set_xlim(plot_bounds[0])
+        ax.set_ylim(plot_bounds[1])
+    plt.savefig(os.path.join(basepath, f"novelty{gen}.png"))
+    plt.close(fig)
+
+
 
 
 def evaluate_outer_find_all(outer_pop, basepath, *, max_value=19, min_value=1, **kwargs):
