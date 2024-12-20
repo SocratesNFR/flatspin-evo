@@ -1280,8 +1280,8 @@ def oscillator_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer
 
 
         _, indx, inv, counts = np.unique(spin.values, axis=0, return_index=True, return_inverse=True, return_counts=True)
-        if counts.max() == 1:
-            return 0 # not oscillator
+        if len(counts) == 1 or counts.max() == 1: # still life or not oscillator
+            return 0
 
         candidate = indx[np.argmax(counts)]
         diffs = np.diff(np.where(inv == candidate)[0])
