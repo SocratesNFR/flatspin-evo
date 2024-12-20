@@ -1283,7 +1283,7 @@ def oscillator_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer
         if len(counts) == 1 or counts.max() == 1: # still life or not oscillator
             return 0
 
-        candidate = indx[np.argmax(counts)]
+        candidate = np.argmax(counts)
         diffs = np.diff(np.where(inv == candidate)[0])
         assert np.all(diffs == diffs[0]), "non-determinancy detected!"
         return diffs[0] # oscillator period
