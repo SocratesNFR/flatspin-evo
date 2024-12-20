@@ -14,8 +14,7 @@ import math
 from flatspin import plotting
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.grid import Grid
-from flatspin.utils import import_class
-
+from flatspin.utils import import_class, pop_params
 
 import os
 
@@ -909,16 +908,35 @@ def directionality_fitness(pop, gen, outdir, tessellate_shape=(8, 8), pad=80, **
                         shared_params=shared_params, preprocessing=preprocessing, **flatspin_kwargs)
     return pop
 
-def influence_fitness(pop, gen, outdir, **flatspin_kwargs):
-    from flatlab.evotile.fitness import fitness_influence_dir, fitness_influence_abs
+
+def influence_fitness(pop, gen, outdir, H, **flatspin_kwargs):
+    from flatlab.evotile.fitness import fitness_influence_dir, fitness_influence_sum
+    from flatlab.evotile.individual import auto_h_ext
+
     id2indv={individual.id: individual for individual in pop}
+    from flatspin.model import TileLatticeSpinIce                  # TODO: generalise
+    model_kwargs = pop_params(TileLatticeSpinIce, flatspin_kwargs) # TODO: generalise
 
     def do_fit_func(id):
         indv=id2indv[id]
-        model = indv.as_ASI(**flatspin_kwargs)
-        inf_dir = fitness_influence_dir(model)
-        inf_abs = fitness_influence_abs(model)
-        return [inf_dir, inf_abs]
+
+        asi = indv.as_ASI(spin_axis="auto", **model_kwargs)
+
+        best_score_dir = -np.inf
+        best_score_abs = -np.inf
+        for h_ext in auto_h_ext(asi, -90, 90, min_dist=0.002, n_clocks=3):
+            asi.set_h_ext(h_ext)
+            score_dir = fitness_influence_dir(asi)["values"]
+            score_abs = fitness_influence_sum(asi)
+
+            if score_dir > best_score_dir:
+                best_score_dir = score_dir
+
+            if score_abs > best_score_abs:
+                best_score_abs = score_abs
+
+
+        return [best_score_dir, best_score_abs]
 
 
     id2fit={}
@@ -929,9 +947,13 @@ def influence_fitness(pop, gen, outdir, **flatspin_kwargs):
         fit = do_fit_func(id)
         return id, fit
 
+    # for id in id2indv:
+        # _, id2fit[id] = helper(id)
+
     id2fit.update(parallel(delayed(helper)(id) for id in id2indv))
     progress_bar.close()
 
+    # print(id2fit)
     def fit_func(ds):
         return id2fit[ds.index["indv_id"].values[0]]
 
@@ -1245,6 +1267,48 @@ def constant_activity_fitness(pop, gen, outdir, active_state=1, state_step=None,
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
     return pop
 
+@ignore_empty_pop
+@scaling_param
+def oscillator_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, **flatspin_kwargs):
+
+    def fit_func(ds):
+        nonlocal state_step
+        if state_step is None:
+            state_step = 1 #ds.params["spp"] # should really set to the number of pulses
+        spin = read_table(ds.tablefile("spin"))
+        spin = spin.iloc[burn_in::state_step, 1:]
+
+
+        _, indx, inv, counts = np.unique(spin.values, axis=0, return_index=True, return_inverse=True, return_counts=True)
+        if counts.max() == 1:
+            return 0 # not oscillator
+
+        candidate = indx[np.argmax(counts)]
+        diffs = np.diff(np.where(inv == candidate)[0])
+        assert np.all(diffs == diffs[0]), "non-determinancy detected!"
+        return diffs[0] # oscillator period
+
+
+    #buffer
+    if buffer:
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+
+        hc[[0, -1], :] = 100
+        hc[:, [0, -1]] = 100
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+
+
+
+    flatspin_kwargs["hc"] = hc
+    flatspin_kwargs["random_seed"] = gen # want seed to vary each generation, probably better way
+
+    def condition(indv):
+        return np.any(np.greater(indv.genome, 0.5))
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    return pop
+
 
 @ignore_empty_pop
 @scaling_param
@@ -1362,4 +1426,5 @@ known_fits={
     "constant_activity": constant_activity_fitness,
     "constant_activity_3d": constant_activity_3d_fitness,
     "influence": influence_fitness,
+    "oscillator": oscillator_fitness,
 }
