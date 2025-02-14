@@ -40,6 +40,7 @@ class Base_Individual(ABC):
         self.gen = gen  # generation of birth
 
         self.fitness = fitness
+
         self.fitness_components = fitness_components
         self.fitness_info = fitness_info
 
@@ -247,7 +248,7 @@ class Base_Individual(ABC):
             cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
             dataset = Dataset.read(shared_params["basepath"])
 
-            process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by)
+            process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait)
             """
             if run_type == "local":
                 process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by)
@@ -333,7 +334,7 @@ class Base_Individual(ABC):
         rs = np.random.get_state()
         run_type = shared_params.get("run", "local")
         if run_type == "local":
-            run_local(dataset, False)
+            run_local(dataset)
 
         elif run_type == "dist":
             run_dist(dataset, wait=wait, max_jobs=max_jobs)
@@ -372,7 +373,7 @@ def process_dataset_dist(dataset, id2indv, fit_func, shared_params, group_by):
     job_script = make_job_script(dataset, group_by)
 
 
-def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by):
+def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait):
     queue = dataset
     if group_by:
         _, queue = zip(*dataset.groupby(group_by))
@@ -385,7 +386,7 @@ def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by):
                 fit_components = calculate_fitness(ds, fit_func)
                 assign_fitness(id2indv, indv_id, fit_components)
             except Exception as e:
-                handle_exception(e, queue, ds, False)#group_by)
+                handle_exception(e, queue, ds, wait)#group_by)
 
 
 def get_ds_indv_id(ds):

@@ -1309,6 +1309,77 @@ def oscillator_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
     return pop
 
+@ignore_empty_pop
+def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state_step=None, buffer=True, burn_in=0, **flatspin_kwargs):
+    from scipy import ndimage
+    from skimage import measure
+
+    def template_score(state, template):
+        match = ndimage.binary_hit_or_miss(state, template==1, template==0)
+        return np.sum(match)
+
+    def make_template(state):
+        components = measure.label(state, background=0, connectivity=2)
+        biggest = np.argmax(np.unique(components, return_counts=True)[1][1:]) + 1
+
+        domain = components == biggest
+
+        edge = ndimage.binary_dilation(domain) ^ domain
+        bbox = ndimage.find_objects(edge)[0]
+
+
+        template = np.ones_like(domain[bbox], dtype=float)
+        template += domain[bbox]
+        template -= edge[bbox]
+        template /= 2
+
+        return template
+
+
+    if grid_size is None:
+        grid_size = flatspin_kwargs["size"]
+    def fit_func(ds):
+        nonlocal state_step, grid_size
+        if state_step is None:
+            state_step = 1 #ds.params["spp"] # should really set to the number of pulses
+        spin = read_table(ds.tablefile("spin"))
+        spin = spin.iloc[burn_in::state_step, 1:]
+
+        t=slice(burn_in, None, state_step)
+        states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
+        states = states[...,0] > 0
+
+        template = make_template(states[0])
+
+        domain_size = np.sum(template==1)
+
+        if domain_size < min_domain_size:
+            return 0
+
+        scores = np.array([template_score(s, template) for s in states])
+        return np.sum(scores[scores > 1]) * domain_size
+
+
+
+    #buffer
+    if buffer:
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+
+        hc[[0, -1], :] = 100
+        hc[:, [0, -1]] = 100
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+
+
+
+    flatspin_kwargs["hc"] = hc
+    flatspin_kwargs["random_seed"] = gen # want seed to vary each generation, probably better way
+
+    def condition(indv):
+        return np.any(np.greater(indv.genome, 0.5))
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    return pop
 
 @ignore_empty_pop
 @scaling_param
@@ -1427,4 +1498,5 @@ known_fits={
     "constant_activity_3d": constant_activity_3d_fitness,
     "influence": influence_fitness,
     "oscillator": oscillator_fitness,
+    "reproduce": reproduce_fitness,
 }
