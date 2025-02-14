@@ -1342,8 +1342,6 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
         nonlocal state_step, grid_size
         if state_step is None:
             state_step = 1 #ds.params["spp"] # should really set to the number of pulses
-        spin = read_table(ds.tablefile("spin"))
-        spin = spin.iloc[burn_in::state_step, 1:]
 
         t=slice(burn_in, None, state_step)
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
@@ -1354,7 +1352,7 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
         domain_size = np.sum(template==1)
 
         if domain_size < min_domain_size:
-            return 0
+            return -1
 
         scores = np.array([template_score(s, template) for s in states])
         return np.sum(scores[scores > 1]) * domain_size
