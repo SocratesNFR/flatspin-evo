@@ -1379,6 +1379,88 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
     return pop
 
+
+@ignore_empty_pop
+def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, **flatspin_kwargs):
+    # requires map_shape (n1, n2, n3, n4)
+    from scipy import ndimage
+    from skimage import measure
+
+
+    def measure_state_features(state):
+        components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
+        
+        if n_comp == 0:  # No foreground components
+            return 0, (np.nan, np.nan), 0, 0
+
+        biggest = np.argmax(np.unique(components, return_counts=True)[1][1:]) + 1
+        domain = components == biggest
+        # plt.imshow(domain, cmap='gray')
+
+        biggest_mass = np.sum(domain)
+        biggest_center = ndimage.center_of_mass(domain)
+        # plt.plot(biggest_center[1], biggest_center[0], 'ro')
+
+        bbox = ndimage.find_objects(domain, 0)[0]
+        # plt.imshow(domain[bbox], cmap='gray')
+        h, w = bbox[0].stop - bbox[0].start, bbox[1].stop - bbox[1].start
+        wh_ratio = (w-h) /(w+h)
+
+        return biggest_mass, biggest_center, wh_ratio, n_comp
+
+
+    if grid_size is None:
+        grid_size = flatspin_kwargs["size"]
+    def fit_func(ds):
+        nonlocal state_step, grid_size
+        if state_step is None:
+            state_step = 1 #ds.params["spp"] # should really set to the number of pulses
+
+        t=slice(burn_in, None, state_step)
+        states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
+        states = states[...,0] > 0
+
+        
+        # measure mass, center, WxH ratio, and num domains per timestep
+        state_measures = [measure_state_features(s) for s in states]
+
+        mass, center, wh_ratio, n_comp = zip(*state_measures)
+        mass, center, wh_ratio, n_comp = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp)
+
+        novelty_labels = ["mean mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
+
+        if np.isnan(center).any():
+            return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
+        
+        velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
+        n_comp_growth = np.diff(n_comp)
+
+        novelty = [mass.mean(), velocity.mean(), wh_ratio.mean(), n_comp_growth.mean()]
+
+        fitness = np.std(mass) + np.std(velocity)
+        
+
+        return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty)
+    
+    #buffer
+    if buffer:
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+
+        hc[[0, -1], :] = 100
+        hc[:, [0, -1]] = 100
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+
+
+
+    flatspin_kwargs["hc"] = hc
+
+    def condition(indv):
+        return True
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    return pop
+
 @ignore_empty_pop
 @scaling_param
 def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, tessellate=None, polar=True, weight_componenets=False, **flatspin_kwargs):
@@ -1497,4 +1579,5 @@ known_fits={
     "influence": influence_fitness,
     "oscillator": oscillator_fitness,
     "reproduce": reproduce_fitness,
+    "novelty_life": novelty_life_fitness,
 }

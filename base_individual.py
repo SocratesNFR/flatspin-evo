@@ -383,8 +383,7 @@ def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, w
         with np.errstate():
             indv_id = get_ds_indv_id(ds)
             try:
-                fit_components = calculate_fitness(ds, fit_func)
-                assign_fitness(id2indv, indv_id, fit_components)
+                calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv)
             except Exception as e:
                 handle_exception(e, queue, ds, wait)#group_by)
 
@@ -397,17 +396,22 @@ def get_ds_indv_id(ds):
 
 
 
-def calculate_fitness(ds, fit_func):
+def calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv):
     fit_components = fit_func(ds)
+    indv = id2indv[indv_id]
+
+    if isinstance(fit_components, dict):
+        for k, v in fit_components.items():
+            setattr(indv, k, v)
+        return
+
+
     try:
         fit_components = list(fit_components)
     except (TypeError):
         fit_components = [fit_components]
-    return fit_components
+    
 
-
-def assign_fitness(id2indv, indv_id, fit_components):
-    indv = id2indv[indv_id]
     if indv.fitness_components is not None:
         indv.fitness_components += fit_components
     else:

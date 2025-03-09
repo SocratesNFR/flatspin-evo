@@ -4,7 +4,7 @@ from tqdm.auto import tqdm
 import logging
 import numpy as np
 import os
-
+from collections import OrderedDict
 
 import evo_alg as ea
 from base_individual import Base_Individual
@@ -27,12 +27,16 @@ class ParallelProgress(Parallel):
 
 class Individual(Base_Individual):
 
-    def __init__(self, *, genome=None, min_len=1, max_len=1, **kwargs):
+    def __init__(self, *, genome=None, min_len=1, max_len=1, genome_params=None, **kwargs):
 
         super().__init__(**kwargs)
 
         self.min_len = min_len
         self.max_len = max_len
+
+        self.genome_params = genome_params or {}
+        assert self.min_len >= len(
+            genome_params), "not enough genes for the genome_params"
 
         self.genome = genome
         if genome is None:
@@ -41,17 +45,15 @@ class Individual(Base_Individual):
                 length = np.random.randint(self.min_len, self.max_len + 1)
             self.genome = random_range(0, 1, [length])
 
-
     def __repr__(self):
         # defines which attributes are ignored by repr
         ignore_attributes = []
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-
-
     def copy(self, **override_kwargs):
         ignored_attrs = ['id', 'gen']
-        params = {k: v for k, v in vars(self).items() if k not in ignored_attrs}
+        params = {k: v for k, v in vars(
+            self).items() if k not in ignored_attrs}
         params.update(override_kwargs)
         if "genome" in params:
             params["genome"] = params["genome"].copy()
@@ -75,13 +77,15 @@ class Individual(Base_Individual):
     def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
         sweep_list = sweep_list or [[0, 0, {}]]
 
-        id2indv = {individual.id: individual for individual in [p for p in pop if condition is None or condition(p)]}
+        id2indv = {individual.id: individual for individual in [
+            p for p in pop if condition is None or condition(p)]}
 
         run_params = []
 
         for id, indv in id2indv.items():
             for i, j, rp in sweep_list:
-                run_params.append(dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params()))
+                run_params.append(
+                    dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params()))
         return run_params
 
     @classmethod
@@ -90,10 +94,14 @@ class Individual(Base_Individual):
 
     def genome2run_params(self):
         """
-        overide this with method to convert genome to run_params
+        override this with method to convert genome to run_params
         return a dictionary of run_params
         """
-        return {}
+        rp = {}
+        for i, (gp, val) in enumerate(self.genome_params.items()):
+            rp[gp] = val[0] + (val[1] - val[0]) * self.genome[i]
+
+        return rp
 
     @property
     def coords(self) -> np.ndarray:
@@ -103,20 +111,20 @@ class Individual(Base_Individual):
     def angles(self) -> np.ndarray:
         return None
 
-
     # ====================  Mutation and Crossover  ====================
+
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
         mutations = [Individual.point_mutate, Individual.full_mutate]
         mutations = [Individual.full_mutate]
-
 
         weights = [1] * len(mutations)
         if len(self.evolved_params_values) > 0:
             mutations += [Individual.mutate_evo_param]
             # increase chance of selecting param-mutation by the num of evo params so they are picked evenly
             weights += [len(self.evolved_params_values)]
-        mutation = np.random.choice(mutations, p=np.array(weights) / np.sum(weights))
+        mutation = np.random.choice(
+            mutations, p=np.array(weights) / np.sum(weights))
         mutation(child, strength)
         child.refresh()
         return [child]
@@ -134,23 +142,20 @@ class Individual(Base_Individual):
         child.genome = np.random.normal(child.genome, strength)
         child.genome = np.clip(child.genome, floor, ceiling)
 
-
-
     def crossover(self, other):
-        child1 = self.copy(parent_ids=[self.id, other.id])
-        child2 = self.copy(parent_ids=[self.id, other.id])
-        Individual.point_crossover(child1, child2)
-        child1.refresh()
-        child2.refresh()
-        return [child1, child2]
+        child = self.line_crossover(other)
+        return [child]
 
-    @classmethod
-    def point_crossover(cls, child1, child2):
-        if len (child1.genome) == 1 and len(child2.genome) == 1:
-            return
-        assert len(child1.genome) == len(child2.genome), "different genome lengths not implemented"
-        indx = np.random.randint(1, len(child1.genome)-1)
-        child1.genome[indx:], child2.genome[indx:] = child2.genome[indx:], child1.genome[indx:]
+    def line_crossover(self, other):
+        assert len(self.genome) == len(
+            other.genome), "different genome lengths not implemented"
+
+        child = self.copy(parent_ids=[self.id, other.id])
+
+        dist = np.random.rand()
+        child.genome = dist * other.genome + (1 - dist) * self.genome
+        return child
+
 
 def random_range(min, max, shape=None):
     if shape is None:
@@ -158,49 +163,66 @@ def random_range(min, max, shape=None):
     else:
         return min + (max - min) * np.random.rand(*shape)
 
-def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fitness=True, calculate_fit_only=False, **kwargs):
+
+def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inner="flips", outer="default",
+                minimize_fitness=True, calculate_fit_only=False, map_elite=False, **kwargs):
     known_fits = {
 
     }  # genotype-specific fitnesses
 
-    inner = known_fits.get(inner, fitness_functions.known_fits.get(inner, inner))
-    outer = known_fits.get(outer, fitness_functions.known_fits.get(outer, outer))
+    inner = known_fits.get(
+        inner, fitness_functions.known_fits.get(inner, inner))
+    outer = known_fits.get(
+        outer, fitness_functions.known_fits.get(outer, outer))
+
+    if map_elite:
+        import map_elites
+        return map_elites.main(outdir, individual_class, inner, minimize_fitness, **kwargs)
 
     if calculate_fit_only:
-        return ea.only_run_fitness_func(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
-    else:
-        return ea.main(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
+        return ea.only_run_fitness_func(outdir, individual_class, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
+    
+    return ea.main(outdir, individual_class, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
 
 
+def main(individual_class=Individual):
+    from flatspin.cmdline import StoreKeyValue, eval_params
+    from base_individual import make_parser
+
+    parser = make_parser()
+    parser.add_argument("-g", "--genome_param", action=StoreKeyValue, default={},
+                        help="""a flatspin parameter to be controlled by a gene in the genome, format: -g param_name=[low, high] """)
+    parser.add_argument("--map-elite", action="store_true",
+                        help="use map-elites algorithm", default=False)
+
+    args = parser.parse_args()
+
+    evolved_params = eval_params(args.evolved_param)
+    genome_params = eval_params(args.genome_param)
+
+    args.individual_param["genome_params"] = OrderedDict(genome_params)
+
+    outpath = os.path.join(os.path.curdir, args.output)
+    logpath = os.path.join(outpath, args.log)
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+    logging.basicConfig(filename=logpath, level=logging.INFO)
+    inner_main(
+        outdir=args.output,
+        individual_class=individual_class,
+        **eval_params(args.parameter),
+        evolved_params=evolved_params,
+        individual_params=eval_params(args.individual_param),
+        outer_eval_params=eval_params(args.outer_eval_param),
+        sweep_params=args.sweep_param,
+        dependent_params=args.dependent_param,
+        repeat=args.repeat,
+        repeat_spec=args.repeat_spec,
+        group_by=args.group_by,
+        calculate_fit_only=args.calculate_fit_only,
+        map_elite=args.map_elite
+    )
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        import argparse
-        from flatspin.cmdline import StoreKeyValue, eval_params
-        from base_individual import make_parser
-
-        parser = make_parser()
-        args = parser.parse_args()
-
-        evolved_params = eval_params(args.evolved_param)
-
-
-        outpath = os.path.join(os.path.curdir, args.output)
-        logpath = os.path.join(outpath, args.log)
-        if not os.path.exists(outpath):
-            os.makedirs(outpath)
-        logging.basicConfig(filename=logpath, level=logging.INFO)
-        main(
-            outdir=args.output,
-            **eval_params(args.parameter),
-            evolved_params=evolved_params,
-            individual_params=eval_params(args.individual_param),
-            outer_eval_params=eval_params(args.outer_eval_param),
-            sweep_params=args.sweep_param,
-            dependent_params=args.dependent_param,
-            repeat=args.repeat,
-            repeat_spec=args.repeat_spec,
-            group_by=args.group_by,
-            calculate_fit_only=args.calculate_fit_only,
-        )
+    main()
