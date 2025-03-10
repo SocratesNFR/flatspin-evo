@@ -16,20 +16,27 @@ class EliteMap:
         self.shape = np.array(shape)
         self.map = CoordMap(self.shape)
 
-        if bounds == None:
-            bounds = np.array([(0, 1)] * len(shape)).T
-            self._auto_bounds = True
+        if bounds is None:
+            bounds = np.array([(0, 1)] * len(shape)).T  # Default auto bounds
+            self._auto_bounds = np.ones(len(shape), dtype=bool)  # All dimensions auto-expand
         else:
-            self._auto_bounds = False
+            processed_bounds = []
+            auto_bounds = []
 
-        assert np.shape(bounds) == (
-            2,
-            len(shape),
-        ), "bounds must be shape (2,len(shape))"
-        assert np.all(
-            bounds[0] < bounds[1]
-        ), "lower bounds must be less than upper bounds"
-        self.bounds = np.array(bounds)
+            for b in bounds:
+                if b is None:
+                    processed_bounds.append((0, 1))  # Default range for auto bounds
+                    auto_bounds.append(True)
+                else:
+                    assert len(b) == 2 and b[0] < b[1], "Each bound must be (min, max) with min < max"
+                    processed_bounds.append(b)
+                    auto_bounds.append(False)
+
+            self.bounds = np.array(processed_bounds).T
+            self._auto_bounds = np.array(auto_bounds, dtype=bool)
+
+        assert np.shape(self.bounds) == (2, len(shape)), "bounds must be shape (2, len(shape))"
+
         self._minimize_fitness = minimize_fitness
         self.add(indvs)
 
@@ -78,21 +85,17 @@ class EliteMap:
                 self.map[coords] = indv
 
     def expand_bounds(self, indvs):
-        if not indvs:
+        if not indvs or not np.any(self._auto_bounds):
             return
 
         fitnesses = np.array([indv.novelty for indv in indvs])
         indv_bounds = np.array([fitnesses.min(axis=0), fitnesses.max(axis=0)])
 
-        # update bounds, but only expand
-        bounds = np.array(
-            [
-                np.minimum(self.bounds[0], indv_bounds[0]),
-                np.maximum(self.bounds[1], indv_bounds[1]),
-            ]
-        )
+        bounds = self.bounds.copy()
+        bounds[0][self._auto_bounds] = np.minimum(bounds[0][self._auto_bounds], indv_bounds[0][self._auto_bounds])
+        bounds[1][self._auto_bounds] = np.maximum(bounds[1][self._auto_bounds], indv_bounds[1][self._auto_bounds])
 
-        if np.all(bounds == self.bounds):  # no change
+        if np.all(bounds == self.bounds):  # No change
             return
 
         self.bounds = bounds
