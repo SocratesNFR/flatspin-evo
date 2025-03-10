@@ -1381,7 +1381,7 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
 
 
 @ignore_empty_pop
-def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), **flatspin_kwargs):
+def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), discard_frozen=False, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1428,6 +1428,17 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
         states = dot_products > 0
 
+        novelty_labels = ["mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
+
+        if discard_frozen: # state cannot freeze
+            # Compare each state with the next one
+            same_consecutive = np.all(states[:-1] == states[1:], axis=tuple(range(1, states.ndim)))
+
+            # Check if any two consecutive states are identical
+            if np.any(same_consecutive):
+                return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
+
+
 
         # measure mass, center, WxH ratio, and num domains per timestep
         state_measures = [measure_state_features(s) for s in states]
@@ -1435,7 +1446,6 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         mass, center, wh_ratio, n_comp = zip(*state_measures)
         mass, center, wh_ratio, n_comp = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp)
 
-        novelty_labels = ["mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
 
         if np.isnan(center).any():
             return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
