@@ -1381,7 +1381,7 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
 
 
 @ignore_empty_pop
-def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), discard_frozen=False, **flatspin_kwargs):
+def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), discard_frozen=False, log_mass=False, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1428,7 +1428,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
         states = dot_products > 0
 
-        novelty_labels = ["mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
+        novelty_labels = ["mean_log_mass" if log_mass else "mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
 
         if discard_frozen: # state cannot freeze
             # Compare each state with the next one
@@ -1453,7 +1453,8 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
         n_comp_growth = np.diff(n_comp)
 
-        novelty = [mass.mean(), velocity.mean(), wh_ratio.mean(), n_comp_growth.mean()]
+        mean_mass = np.log10(mass.mean()) if log_mass else mass.mean()
+        novelty = [mean_mass, velocity.mean(), wh_ratio.mean(), n_comp_growth.mean()]
 
         fitness = np.std(mass) + np.std(velocity)
 
