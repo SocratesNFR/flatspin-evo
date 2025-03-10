@@ -43,19 +43,15 @@ class EliteMap:
     def coords_in_map(self, coords):
         coords = np.array(coords)
 
-        normed_coords = (
-            coords - self.bounds[0]) / (self.bounds[1] - self.bounds[0])
-        shape_coords = np.floor(normed_coords * (self.shape)).astype(int)
+        # Clip coordinates to be within bounds
+        clipped_coords = np.clip(coords, self.bounds[0], self.bounds[1])
 
-        # If coords are exactly the upper bound, set them to the last valid index
-        shape_coords = np.where(
-            coords == self.bounds[1], self.shape - 1, shape_coords)
+        # Normalize and scale to the shape
+        normed_coords = (clipped_coords - self.bounds[0]) / (self.bounds[1] - self.bounds[0])
+        shape_coords = np.floor(normed_coords * (self.shape - 1)).astype(int)
 
-        return (
-            tuple(shape_coords)
-            if np.all(shape_coords < self.shape) and np.all(shape_coords >= 0)
-            else None
-        )
+        # Return the final shape coordinates
+        return tuple(shape_coords)
 
     def better_than(self, indv1, indv2):
 
@@ -73,7 +69,7 @@ class EliteMap:
         if not indvs:
             return
 
-        if self._auto_bounds:
+        if self._auto_bounds.any():
             self.expand_bounds(indvs)
 
         for indv in indvs:
