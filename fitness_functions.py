@@ -1381,7 +1381,7 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
 
 
 @ignore_empty_pop
-def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, **flatspin_kwargs):
+def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1389,7 +1389,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 
     def measure_state_features(state):
         components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
-        
+
         if n_comp == 0:  # No foreground components
             return 0, (np.nan, np.nan), 0, 0
 
@@ -1412,15 +1412,23 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal state_step, grid_size
+        nonlocal state_step, grid_size, spin_dir
         if state_step is None:
             state_step = 1 #ds.params["spp"] # should really set to the number of pulses
 
         t=slice(burn_in, None, state_step)
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
-        states = states[...,0] > 0
 
-        
+        direction = np.array(spin_dir)
+        direction /= np.linalg.norm(direction) # normalize
+
+        # Compute dot product between each magnetization vector and the direction
+        dot_products = np.einsum('...i,i->...', states, direction)  # Efficient batch dot product
+
+        # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
+        states = dot_products > 0
+
+
         # measure mass, center, WxH ratio, and num domains per timestep
         state_measures = [measure_state_features(s) for s in states]
 
@@ -1431,17 +1439,17 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 
         if np.isnan(center).any():
             return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
-        
+
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
         n_comp_growth = np.diff(n_comp)
 
         novelty = [mass.mean(), velocity.mean(), wh_ratio.mean(), n_comp_growth.mean()]
 
         fitness = np.std(mass) + np.std(velocity)
-        
+
 
         return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty)
-    
+
     #buffer
     if buffer:
         hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
