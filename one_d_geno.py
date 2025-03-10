@@ -138,10 +138,10 @@ class Individual(Base_Individual):
 
     @classmethod
     def full_mutate(cls, child, strength=1, floor=0, ceiling=1):
-        strength /= 100
+        strength *  0.01
         child.genome = np.random.normal(child.genome, strength)
         child.genome = np.clip(child.genome, floor, ceiling)
-
+        
     def crossover(self, other):
         child = self.line_crossover(other)
         return [child]
