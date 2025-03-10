@@ -1435,7 +1435,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         mass, center, wh_ratio, n_comp = zip(*state_measures)
         mass, center, wh_ratio, n_comp = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp)
 
-        novelty_labels = ["mean mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
+        novelty_labels = ["mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
 
         if np.isnan(center).any():
             return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
