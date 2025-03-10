@@ -1419,7 +1419,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         t=slice(burn_in, None, state_step)
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
 
-        direction = np.array(spin_dir)
+        direction = np.array(spin_dir, dtype=float)
         direction /= np.linalg.norm(direction) # normalize
 
         # Compute dot product between each magnetization vector and the direction
