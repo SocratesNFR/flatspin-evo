@@ -1381,7 +1381,7 @@ def reproduce_fitness(pop, gen, outdir, min_domain_size=3, grid_size=None, state
 
 
 @ignore_empty_pop
-def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=True, burn_in=0, spin_dir=(0,0), discard_frozen=False, log_mass=False, **flatspin_kwargs):
+def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False, log_mass=False, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1463,16 +1463,17 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 
     #buffer
     if buffer:
-        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+        buff_thick = int(buffer)
 
-        hc[[0, -1], :] = 100
-        hc[:, [0, -1]] = 100
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+        hc[:buff_thick, :] = 100
+        hc[-buff_thick:, :] = 100
+        hc[:, :buff_thick] = 100
+        hc[:, -buff_thick:] = 100
+
 
         hc *= flatspin_kwargs.get("hc", 0.2)
-
-
-
-    flatspin_kwargs["hc"] = hc
+        flatspin_kwargs["hc"] = hc
 
     def condition(indv):
         return True
