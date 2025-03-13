@@ -195,15 +195,15 @@ def update_superdataset(
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
             ind = ds.index
-            ind.insert(0, "gen", gen)  # current generation
-            ind.insert(2, "fitness", indv.fitness)
-            ind.insert(3, "coords", str(coords))
-            ind.insert(4, "best", int(indv == best))
-            ind.insert(5, "born", gen)
-            for i, param in enumerate(dataset_params):
-                ind.insert(
-                    6 + i, param, [getattr(indv, param)] * len(ds.index)
-                )  # multiply for when group-by causes copied rows
+            ind = ind.assign(
+                gen=gen,
+                fitness=indv.fitness,
+                coords=str(coords),
+                best=int(indv == best),
+                born=gen
+            )
+            for param in dataset_params:
+                ind[param] = [getattr(indv, param)] * len(ds.index)  # multiply for when group-by causes copied rows
 
             # patch outdir
             ind["outdir"] = ind["outdir"].apply(
@@ -219,8 +219,8 @@ def update_superdataset(
             # novelty measures should be added last due to variable column number
             column_names = indv.novelty_labels if hasattr(indv, "novelty_labels") else [
                 f"novelty_measures{i}" for i in range(len(indv.novelty))]
-            for name, val in zip(column_names, indv.novelty):
-                ind.insert(len(ind.columns), name, val)
+            novelty_data = {name: val for name, val in zip(column_names, indv.novelty)}
+            ind = ind.assign(**novelty_data)  # Efficient batch assignment
 
             dataset.index = pd.concat([dataset.index, ind], ignore_index=True)
         if not dataset.params:
@@ -457,12 +457,14 @@ def main(
         dataset.save()
 
         better = min if minimize_fitness else max
-        best = better(eliteMap.map.list_values(),
-                      key=lambda indv: indv.fitness)
+        best = better(
+            filter(lambda indv: not np.isnan(indv.fitness), eliteMap.map.list_values()),
+            key=lambda indv: indv.fitness,
+            default=None  # Handle case where all values are NaN
+        )
 
         print(f"best fitness: {best.fitness}")
         print(f"  with novelty measures: {best.novelty}\n")
-        
         print(f"{len(dataset.index[dataset.index['born'] == gen])} new individuals added to map")
 
         save_snapshot(outdir, eliteMap.map.list_values())
