@@ -1428,7 +1428,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
         states = dot_products > 0
 
-        novelty_labels = ["mean_log_mass" if log_mass else "mean_mass", "mean_velocity", "mean_wh", "mean_ncomp_growth"]
+        novelty_labels = ["mean_log_mass" if log_mass else "mean_mass", "mean_velocity", "mean_wh", "mean_ncomp"]
 
         if discard_frozen: # state cannot freeze
             # Compare each state with the next one
@@ -1451,10 +1451,10 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             return dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0, 0, 0, 0])
 
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
-        n_comp_growth = np.diff(n_comp)
+        # n_comp_growth = np.diff(n_comp)
 
         mean_mass = np.log10(mass.mean()) if log_mass else mass.mean()
-        novelty = [mean_mass, velocity.mean(), wh_ratio.mean(), n_comp_growth.mean()]
+        novelty = [mean_mass, velocity.mean(), wh_ratio.mean(), n_comp.mean()]
 
         fitness = np.std(mass) + np.std(velocity)
 
