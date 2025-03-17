@@ -1430,7 +1430,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal state_step, grid_size, spin_dir
+        nonlocal state_step, grid_size, spin_dir, novelty_labels
         if state_step is None:
             state_step = 1 #ds.params["spp"] # should really set to the number of pulses
 
