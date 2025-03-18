@@ -416,7 +416,12 @@ def main(
         print("    Mutate")
         mut_kids = []
 
-        mut_parents = choose(eliteMap.map.list_values(),
+        parent_pool = eliteMap.map.list_values()
+        # replace nan parents with new random
+        parent_pool = [parent if parent.fitness != np.nan else individual_class(gen=gen, **individual_params)
+                       for parent in parent_pool
+                       ]
+        mut_parents = choose(parent_pool,
                              size=int(pop_size * mut_prob))
         for parent in mut_parents:
             mut_kids += parent.mutate(mut_strength)
@@ -424,7 +429,7 @@ def main(
         # Crossover!
         print("    Crossover")
         crossover_kids = crossover(
-            eliteMap.map.list_values(), int(pop_size * cx_prob))
+            parent_pool, int(pop_size * cx_prob))
 
         kids = mut_kids + crossover_kids
         for indv in kids:
