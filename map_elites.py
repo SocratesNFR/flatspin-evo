@@ -463,8 +463,10 @@ def main(
             default=None  # Handle case where all values are NaN
         )
 
-        print(f"best fitness: {best.fitness if best is not None else 'NaN'}")
-        print(f"  with novelty measures: {best.novelty}\n")
+        if best is not None:
+            print(f"best fitness: {best.fitness}")
+            print(f"  with novelty measures: {best.novelty}\n")
+
         print(f"{len(dataset.index[dataset.index['born'] == gen])} new individuals added to map")
 
         save_snapshot(outdir, eliteMap.map.list_values())
