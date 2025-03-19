@@ -174,7 +174,9 @@ def update_superdataset(
     if len(elite_map.map.values()) < 1:
         return
     dataset_params = dataset_params or []
-    best = elite_map.map.list_values()[0]
+
+    best = get_best(elite_map.map.list_values(), minimize_fitness) or elite_map.map.list_values()[0]
+
     if len(elite_map.map.values()) > 1:
         fn = min if minimize_fitness else max
         best = fn(elite_map.map.list_values(), key=lambda indv: indv.fitness)
@@ -333,6 +335,14 @@ def choose(lst, size):
 
     return [lst[i] for i in chosen]
 
+def get_best(indvs, minimize_fitness):
+    better = min if minimize_fitness else max
+    best = better(
+        filter(lambda indv: not np.isnan(indv.fitness), indvs),
+        key=lambda indv: indv.fitness,
+        default=None  # Handle case where all values are NaN
+    )
+    return best
 
 def main(
     outdir,
@@ -461,12 +471,7 @@ def main(
         )
         dataset.save()
 
-        better = min if minimize_fitness else max
-        best = better(
-            filter(lambda indv: not np.isnan(indv.fitness), eliteMap.map.list_values()),
-            key=lambda indv: indv.fitness,
-            default=None  # Handle case where all values are NaN
-        )
+        best = get_best(eliteMap.map.list_values(), minimize_fitness)
 
         if best is not None:
             print(f"best fitness: {best.fitness}")
