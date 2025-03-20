@@ -177,10 +177,6 @@ def update_superdataset(
 
     best = get_best(elite_map.map.list_values(), minimize_fitness) or elite_map.map.list_values()[0]
 
-    if len(elite_map.map.values()) > 1:
-        fn = min if minimize_fitness else max
-        best = fn(elite_map.map.list_values(), key=lambda indv: indv.fitness)
-
     for coords, indv in elite_map.map.items():
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
