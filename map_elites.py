@@ -17,7 +17,7 @@ class EliteMap:
         self.map = CoordMap(self.shape)
 
         if bounds is None:
-            bounds = np.array([(0, 1)] * len(shape)).T  # Default auto bounds
+            self.bounds = np.array([(0, 1)] * len(shape)).T  # Default auto bounds
             self._auto_bounds = np.ones(len(shape), dtype=bool)  # All dimensions auto-expand
         else:
             processed_bounds = []
