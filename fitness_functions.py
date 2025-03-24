@@ -1424,8 +1424,9 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # plt.imshow(domain[bbox], cmap='gray')
         h, w = bbox[0].stop - bbox[0].start, bbox[1].stop - bbox[1].start
         wh_ratio = (w-h) /(w+h)
+        area = w * h
 
-        return biggest_mass, biggest_center, wh_ratio, n_comp, domain[bbox]
+        return biggest_mass, biggest_center, wh_ratio, n_comp, domain[bbox], area
 
 
     if grid_size is None:
@@ -1465,8 +1466,8 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # measure mass, center, WxH ratio, and num domains per timestep
         state_measures = [measure_state_features(s) for s in states]
 
-        mass, center, wh_ratio, n_comp, domains = zip(*state_measures)
-        mass, center, wh_ratio, n_comp = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp)
+        mass, center, wh_ratio, n_comp, domains, area = zip(*state_measures)
+        mass, center, wh_ratio, n_comp, area = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp), np.array(area)
 
         if np.isnan(center).any():
             return return_on_fail
@@ -1485,11 +1486,12 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             "mean_ncomp" : n_comp.mean(),
             "mean_ncomp_growth" : n_comp_growth.mean(),
             "transient" : count_unique_arrays(domains),
+            "area" : area.mean(),
         }
 
         novelty_list = [novelty[label] for label in novelty_labels]
 
-        fitness = (np.std(mass) + np.std(velocity)) * novelty["mean_log_mass"]
+        fitness = (np.std(mass) + np.std(velocity)) * novelty["area"]
 
         return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
 
