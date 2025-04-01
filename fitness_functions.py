@@ -1491,7 +1491,8 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 
         novelty_list = [novelty[label] for label in novelty_labels]
 
-        fitness = (np.std(mass) + np.std(velocity)) * novelty["area"]
+        # fitness = (np.std(mass) + np.std(velocity)) * novelty["area"]
+        fitness = np.std(mass)
 
         return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
 
