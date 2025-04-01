@@ -1419,7 +1419,7 @@ def find_cycle_length(arr_list):
 
 @ignore_empty_pop
 def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False,
-                         novelty_labels=None, max_mass=None, **flatspin_kwargs):
+                         novelty_labels=None, max_mass=None, min_steps=0, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1451,7 +1451,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal state_step, grid_size, spin_dir, novelty_labels
+        nonlocal state_step, grid_size, spin_dir, novelty_labels, min_steps
         if state_step is None:
             state_step = 1 #ds.params["spp"] # should really set to the number of pulses
 
@@ -1471,6 +1471,12 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             novelty_labels = ["mean_log_mass", "mean_velocity", "mean_wh", "mean_ncomp"]
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if min_steps:
+            stats = read_table(ds.tablefile("stat"))
+            steps = int(stats.set_index("0").T["steps"].values[0])
+            if steps < min_steps:
+                return return_on_fail
 
         if discard_frozen: # state cannot freeze
             # Compare each state with the next one
