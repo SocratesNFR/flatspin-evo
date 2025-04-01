@@ -1397,6 +1397,25 @@ def count_unique_arrays(arr_list):
             unique_count += 1
     return unique_count
 
+def find_cycle_length(arr_list):
+    seen = {}  # Dictionary: shape -> list of (index, array)
+
+    for i, arr in enumerate(arr_list):
+        shape = arr.shape
+
+        if shape not in seen:
+            seen[shape] = [(i, arr)]  # Store first occurrence
+        else:
+            # Check if this exact array has been seen before
+            for prev_index, existing in seen[shape]:
+                if np.array_equal(arr, existing):
+                    return i - prev_index  # Cycle length found
+
+            seen[shape].append((i, arr))  # Store new occurrence
+
+    return len(arr_list)  # No cycle found, return max possible cycle length
+
+
 
 @ignore_empty_pop
 def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False,
@@ -1410,7 +1429,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
 
         if n_comp == 0:  # No foreground components
-            return 0, (np.nan, np.nan), 0, 0
+            return 0, (np.nan, np.nan), 0, 0, None, 0
 
         biggest = np.argmax(np.unique(components, return_counts=True)[1][1:]) + 1
         domain = components == biggest
@@ -1478,6 +1497,9 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
         n_comp_growth = np.diff(n_comp)
 
+        transient = count_unique_arrays(domains) if "transient" in novelty_labels else None
+        cycle_len = find_cycle_length(domains) if "cycle_len" in novelty_labels else None
+
         novelty = {
             "mean_mass" : mass.mean(),
             "mean_log_mass" : np.log10(mass.mean()),
@@ -1485,8 +1507,9 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             "mean_wh" : wh_ratio.mean(),
             "mean_ncomp" : n_comp.mean(),
             "mean_ncomp_growth" : n_comp_growth.mean(),
-            "transient" : count_unique_arrays(domains),
-            "area" : area.mean(),
+            "transient" : transient,
+            "mean_area" : area.mean(),
+            "cycle_len" : cycle_len,
         }
 
         novelty_list = [novelty[label] for label in novelty_labels]
