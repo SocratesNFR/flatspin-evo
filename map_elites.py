@@ -148,7 +148,7 @@ class EliteMap:
 
     def info_dump(self, gen=None):
         info = [f"=== " + (f"gen: {gen} " if gen is not None else "") + f"bounds: {self.bounds.tolist()} ==="]
-        info += [f"coord:{coord}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
+        info += [f"coord:{coord.tolist()}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
         return "\n".join(info) + "\n"
 
     def expand_bounds(self, indvs):
