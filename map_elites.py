@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import shlex
 import os
 import sys
@@ -12,13 +12,24 @@ import pickle as pkl
 
 
 class EliteMap:
-    def __init__(self, shape, bounds=None, minimize_fitness=False, indvs=None):
+    def __init__(
+        self,
+        shape,
+        bounds=None,
+        minimize_fitness=False,
+        indvs=None,
+        target_capacity=None,
+    ):
         self.shape = np.array(shape)
         self.map = CoordMap(self.shape)
+        self.filler_map = CoordMap(self.shape)
+        self._target_capacity = target_capacity
 
         if bounds is None:
             self.bounds = np.array([(0, 1)] * len(shape)).T  # Default auto bounds
-            self._auto_bounds = np.ones(len(shape), dtype=bool)  # All dimensions auto-expand
+            self._auto_bounds = np.ones(
+                len(shape), dtype=bool
+            )  # All dimensions auto-expand
         else:
             processed_bounds = []
             auto_bounds = []
@@ -28,14 +39,19 @@ class EliteMap:
                     processed_bounds.append((0, 1))  # Default range for auto bounds
                     auto_bounds.append(True)
                 else:
-                    assert len(b) == 2 and b[0] < b[1], "Each bound must be (min, max) with min < max"
+                    assert (
+                        len(b) == 2 and b[0] < b[1]
+                    ), "Each bound must be (min, max) with min < max"
                     processed_bounds.append(b)
                     auto_bounds.append(False)
 
             self.bounds = np.array(processed_bounds).T
             self._auto_bounds = np.array(auto_bounds, dtype=bool)
 
-        assert np.shape(self.bounds) == (2, len(shape)), "bounds must be shape (2, len(shape))"
+        assert np.shape(self.bounds) == (
+            2,
+            len(shape),
+        ), "bounds must be shape (2, len(shape))"
 
         self._minimize_fitness = minimize_fitness
         self.add(indvs)
@@ -47,7 +63,9 @@ class EliteMap:
         clipped_coords = np.clip(coords, self.bounds[0], self.bounds[1])
 
         # Normalize and scale to the shape
-        normed_coords = (clipped_coords - self.bounds[0]) / (self.bounds[1] - self.bounds[0])
+        normed_coords = (clipped_coords - self.bounds[0]) / (
+            self.bounds[1] - self.bounds[0]
+        )
         shape_coords = np.floor(normed_coords * (self.shape - 1)).astype(int)
 
         # Return the final shape coordinates
@@ -72,13 +90,71 @@ class EliteMap:
         if self._auto_bounds.any():
             self.expand_bounds(indvs)
 
+        rejects = defaultdict(list)
         for indv in indvs:
             coords = self.coords_in_map(indv.novelty)
             if coords != None and (
-                self.map[coords] is None or self.better_than(
-                    indv, self.map[coords])
+                self.map[coords] is None or self.better_than(indv, self.map[coords])
             ):
                 self.map[coords] = indv
+            else:
+                rejects[coords].append(indv)
+        if self._target_capacity:
+            self.fill_with_rejects(rejects)
+
+    def fill_with_rejects(self, rejects):
+        if not self._target_capacity or self._target_capacity < len(self.map):
+            self.filler_map.clear()
+            return
+
+        remaining_capacity = self._target_capacity - len(self.map)
+
+        # add current filler map to rejects (recalc coords incase bounds have changed)
+        for indv_list in self.filler_map.values():
+            for indv in indv_list:
+                rejects[self.coords_in_map(indv.novelty)].append(indv)
+        self.filler_map.clear()
+
+        while remaining_capacity > 0 and rejects:
+            keys = list(rejects.keys())
+            np.random.shuffle(keys)  # Iterate in random order
+
+            for coords in keys:
+                if not rejects[coords]:  # Skip if empty
+                    del rejects[coords]
+                    continue
+
+                # Pick the best individual from the list
+                best_indv = get_best(rejects[coords], self._minimize_fitness, True)
+                if self.filler_map[coords]:
+                    self.filler_map[coords].append(best_indv)
+                else:
+                    self.filler_map[coords] = [best_indv]
+                rejects[coords].remove(best_indv)
+
+                remaining_capacity -= 1
+                if remaining_capacity <= 0:
+                    break  # Stop if capacity is met
+
+    def population(self):
+        # print("pop")
+        # print("map = ")
+        # print(self.map.list_values())
+        # print("filler map = ")
+        # print(self.filler_map.list_values())
+        return self.map.list_values() + [indv for indv_list in self.filler_map.list_values() for indv in indv_list]
+
+    def coords_and_population(self):
+        return list(self.map.items()) + [
+            (coords, indv)
+            for coords, indvs in self.filler_map.items()
+            for indv in indvs
+        ]
+
+    def info_dump(self, gen=None):
+        info = [f"=== gen {gen} ===" if gen is not None else "=========="]
+        info += [f"coord:{coord}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
+        return "\n".join(info)
 
     def expand_bounds(self, indvs):
         if not indvs or not np.any(self._auto_bounds):
@@ -88,8 +164,12 @@ class EliteMap:
         indv_bounds = np.array([fitnesses.min(axis=0), fitnesses.max(axis=0)])
 
         bounds = self.bounds.copy()
-        bounds[0][self._auto_bounds] = np.minimum(bounds[0][self._auto_bounds], indv_bounds[0][self._auto_bounds])
-        bounds[1][self._auto_bounds] = np.maximum(bounds[1][self._auto_bounds], indv_bounds[1][self._auto_bounds])
+        bounds[0][self._auto_bounds] = np.minimum(
+            bounds[0][self._auto_bounds], indv_bounds[0][self._auto_bounds]
+        )
+        bounds[1][self._auto_bounds] = np.maximum(
+            bounds[1][self._auto_bounds], indv_bounds[1][self._auto_bounds]
+        )
 
         if np.all(bounds == self.bounds):  # No change
             return
@@ -98,7 +178,7 @@ class EliteMap:
         self.remap()
 
     def remap(self):
-        indvs = list(self.map.values())
+        indvs = self.map.list_values()
         self.map.clear()
         self.add(indvs)
 
@@ -136,8 +216,7 @@ class CoordMap:
             raise ValueError("Coordinates are out of bounds.")
 
         if len(coords) != len(self.shape):
-            raise ValueError(
-                "Coordinates have the wrong number of dimensions.")
+            raise ValueError("Coordinates have the wrong number of dimensions.")
 
         if coords.dtype != int:
             raise ValueError("Coordinates must be integers.")
@@ -165,19 +244,22 @@ class CoordMap:
         self.data.clear()
         self._cache_values = None
 
+    def __len__(self):
+        return len(self.data)
+
 
 def update_superdataset(
     dataset, outdir, elite_map, gen, minimize_fitness=True, dataset_params=None
 ):
     # pop = list(filter(lambda indv: np.isfinite(indv.fitness), pop))
-
-    if len(elite_map.map.values()) < 1:
+    pop = elite_map.population()
+    if len(pop) < 1:
         return
     dataset_params = dataset_params or []
 
-    best = get_best(elite_map.map.list_values(), minimize_fitness) or elite_map.map.list_values()[0]
+    best = get_best(pop, minimize_fitness) or pop[0]
 
-    for coords, indv in elite_map.map.items():
+    for coords, indv in elite_map.coords_and_population():
         ind = dataset.index
         if "indv_id" in ind.columns and indv.id in ind["indv_id"].values:
             copy_row = (
@@ -187,8 +269,7 @@ def update_superdataset(
             copy_row["fitness"] = indv.fitness
             copy_row["best"] = int(indv == best)
             # dataset.index = ind.append(copy_row, ignore_index=True)
-            dataset.index = pd.concat(
-                [dataset.index, copy_row], ignore_index=True)
+            dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
         else:
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
@@ -198,10 +279,12 @@ def update_superdataset(
                 fitness=indv.fitness,
                 coords=str(coords),
                 best=int(indv == best),
-                born=gen
+                born=gen,
             )
             for param in dataset_params:
-                ind[param] = [getattr(indv, param)] * len(ds.index)  # multiply for when group-by causes copied rows
+                ind[param] = [getattr(indv, param)] * len(
+                    ds.index
+                )  # multiply for when group-by causes copied rows
 
             # patch outdir
             ind["outdir"] = ind["outdir"].apply(
@@ -215,8 +298,11 @@ def update_superdataset(
             ind.drop(columns=to_drop, inplace=True)  # debug
 
             # novelty measures should be added last due to variable column number
-            column_names = indv.novelty_labels if hasattr(indv, "novelty_labels") else [
-                f"novelty_measures{i}" for i in range(len(indv.novelty))]
+            column_names = (
+                indv.novelty_labels
+                if hasattr(indv, "novelty_labels")
+                else [f"novelty_measures{i}" for i in range(len(indv.novelty))]
+            )
             novelty_data = {name: val for name, val in zip(column_names, indv.novelty)}
             ind = ind.assign(**novelty_data)  # Efficient batch assignment
 
@@ -244,8 +330,7 @@ def setup_continue_run(outdir, individual_class, start_gen):
         # rename last gen so not overwritten
         gen_string = f"gen{start_gen}"
         os.rename(
-            os.path.join(outdir, gen_string), os.path.join(
-                outdir, "old_" + gen_string)
+            os.path.join(outdir, gen_string), os.path.join(outdir, "old_" + gen_string)
         )
         gen_string = "old_" + gen_string
     else:
@@ -270,8 +355,7 @@ def main_check_args(individual_params, evolved_params, sweep_params, kwargs):
         check_args[0][i] for i in range(len(check_args[0])) if check_args[1][i] > 1
     ]
     if check_args:
-        raise RuntimeError(
-            f"param '{check_args[0]}' appears in multiple param groups")
+        raise RuntimeError(f"param '{check_args[0]}' appears in multiple param groups")
 
 
 def setup_evolved_params(evolved_params, individual_class):
@@ -326,19 +410,28 @@ def choose(lst, size):
         chosen += list(indices) * repeats  # Add repeated full list cycles
 
     # Add remaining random choices
-    chosen += np.random.choice(a=indices, size=size -
-                               len(chosen), replace=False).tolist()
+    chosen += np.random.choice(
+        a=indices, size=size - len(chosen), replace=False
+    ).tolist()
 
     return [lst[i] for i in chosen]
 
-def get_best(indvs, minimize_fitness):
+
+def get_best(indvs, minimize_fitness, return_nan=False):
     better = min if minimize_fitness else max
     best = better(
         filter(lambda indv: not np.isnan(indv.fitness), indvs),
         key=lambda indv: indv.fitness,
-        default=None  # Handle case where all values are NaN
+        default=None,  # Handle case where all values are NaN
     )
+    if return_nan:
+        return best or indvs[0] # all nan so return first
     return best
+
+def log_elite_map(elite_map):
+    with open("elite_map.log", "a") as f:
+        f.write(elite_map.info_dump())
+
 
 def main(
     outdir,
@@ -361,6 +454,7 @@ def main(
     dataset_params=None,
     map_shape=(2, 2),
     map_bounds=None,
+    map_target_capacity=None,
     **kwargs,
 ):
 
@@ -376,17 +470,17 @@ def main(
 
     setup_evolved_params(evolved_params, individual_class)
 
-    eliteMap = EliteMap(shape=map_shape, bounds=map_bounds,
-                        minimize_fitness=minimize_fitness)
+    elite_map = EliteMap(
+        shape=map_shape, bounds=map_bounds, minimize_fitness=minimize_fitness,
+        target_capacity=map_target_capacity
+    )
 
     if continue_run:
-        init_pop, dataset = setup_continue_run(
-            outdir, individual_class, starting_gen)
-        eliteMap.add(init_pop)
+        init_pop, dataset = setup_continue_run(outdir, individual_class, starting_gen)
+        elite_map.add(init_pop)
 
     else:
-        init_pop = [individual_class(**individual_params)
-                    for _ in range(pop_size)]
+        init_pop = [individual_class(**individual_params) for _ in range(pop_size)]
 
         evaluate_inner(
             init_pop,
@@ -397,7 +491,7 @@ def main(
             dependent_params=dependent_params,
             **kwargs,
         )
-        eliteMap.add(init_pop)
+        elite_map.add(init_pop)
 
         # create superdataset
         index = pd.DataFrame()
@@ -406,7 +500,8 @@ def main(
         }
         dataset = Dataset(index, None, info, basepath=outdir)
 
-        update_superdataset(dataset, outdir, eliteMap, 0, dataset_params)
+        update_superdataset(dataset, outdir, elite_map, 0, dataset_params)
+        log_elite_map(elite_map)
         dataset.save()
 
     gen_times = []
@@ -422,20 +517,23 @@ def main(
         print("    Mutate")
         mut_kids = []
 
-        parent_pool = eliteMap.map.list_values()
+        parent_pool = elite_map.population()
         # replace nan parents with new random
-        parent_pool = [parent if parent.fitness != np.nan else individual_class(gen=gen, **individual_params)
-                       for parent in parent_pool
-                       ]
-        mut_parents = choose(parent_pool,
-                             size=int(pop_size * mut_prob))
+        parent_pool = [
+            (
+                parent
+                if parent.fitness != np.nan
+                else individual_class(gen=gen, **individual_params)
+            )
+            for parent in parent_pool
+        ]
+        mut_parents = choose(parent_pool, size=int(pop_size * mut_prob))
         for parent in mut_parents:
             mut_kids += parent.mutate(mut_strength)
 
         # Crossover!
         print("    Crossover")
-        crossover_kids = crossover(
-            parent_pool, int(pop_size * cx_prob))
+        crossover_kids = crossover(parent_pool, int(pop_size * cx_prob))
 
         kids = mut_kids + crossover_kids
         for indv in kids:
@@ -460,22 +558,24 @@ def main(
             kid.fitness = kid.fitness_components[0]
             kid.novelty = kid.fitness_components[1:]
 
-        eliteMap.add(kids)
+        elite_map.add(kids)
 
         update_superdataset(
-            dataset, outdir, eliteMap, gen, minimize_fitness, dataset_params
+            dataset, outdir, elite_map, gen, minimize_fitness, dataset_params
         )
         dataset.save()
 
-        best = get_best(eliteMap.map.list_values(), minimize_fitness)
+        best = get_best(elite_map.population(), minimize_fitness)
 
         if best is not None:
             print(f"best fitness: {best.fitness}")
             print(f"  with novelty measures: {best.novelty}\n")
 
-        print(f"{len(dataset.index[dataset.index['born'] == gen])} new individuals added to map")
+        print(
+            f"{len(dataset.index[dataset.index['born'] == gen])} new individuals added to map"
+        )
 
-        save_snapshot(outdir, eliteMap.map.list_values())
+        save_snapshot(outdir, elite_map.population())
 
         gen_times.append((datetime.now() - time).total_seconds())
     return best
