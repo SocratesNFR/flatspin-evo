@@ -216,7 +216,7 @@ class CoordMap:
         if coords.dtype != int:
             raise ValueError("Coordinates must be integers.")
 
-        return tuple(coords)
+        return tuple(coords.tolist())
 
     def keys(self):
         """Returns the keys of the internal dictionary."""
