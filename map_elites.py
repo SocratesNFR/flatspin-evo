@@ -137,11 +137,6 @@ class EliteMap:
                     break  # Stop if capacity is met
 
     def population(self):
-        # print("pop")
-        # print("map = ")
-        # print(self.map.list_values())
-        # print("filler map = ")
-        # print(self.filler_map.list_values())
         return self.map.list_values() + [indv for indv_list in self.filler_map.list_values() for indv in indv_list]
 
     def coords_and_population(self):
@@ -152,7 +147,7 @@ class EliteMap:
         ]
 
     def info_dump(self, gen=None):
-        info = [f"=== gen {gen} ===" if gen is not None else "=========="]
+        info = [f"=== " + (f"gen: {gen}" if gen is not None else "") + f"bounds: {self.bounds.tolist()} ==="]
         info += [f"coord:{coord}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
         return "\n".join(info)
 
@@ -428,9 +423,9 @@ def get_best(indvs, minimize_fitness, return_nan=False):
         return best or indvs[0] # all nan so return first
     return best
 
-def log_elite_map(elite_map):
-    with open("elite_map.log", "a") as f:
-        f.write(elite_map.info_dump())
+def log_elite_map(elite_map, basepath="", gen=None):
+    with open(os.path.join(basepath, "elite_map.log"), "a") as f:
+        f.write(elite_map.info_dump(gen=gen))
 
 
 def main(
@@ -501,7 +496,7 @@ def main(
         dataset = Dataset(index, None, info, basepath=outdir)
 
         update_superdataset(dataset, outdir, elite_map, 0, dataset_params)
-        log_elite_map(elite_map)
+        log_elite_map(elite_map, outdir, 0)
         dataset.save()
 
     gen_times = []
@@ -564,6 +559,7 @@ def main(
             dataset, outdir, elite_map, gen, minimize_fitness, dataset_params
         )
         dataset.save()
+        log_elite_map(elite_map, outdir, gen)
 
         best = get_best(elite_map.population(), minimize_fitness)
 
