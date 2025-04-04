@@ -69,7 +69,7 @@ class EliteMap:
         shape_coords = np.floor(normed_coords * (self.shape - 1)).astype(int)
 
         # Return the final shape coordinates
-        return tuple(shape_coords)
+        return tuple(shape_coords.tolist())
 
     def better_than(self, indv1, indv2):
 
@@ -148,7 +148,7 @@ class EliteMap:
 
     def info_dump(self, gen=None):
         info = [f"=== " + (f"gen: {gen} " if gen is not None else "") + f"bounds: {self.bounds.tolist()} ==="]
-        info += [f"coord:{coord.tolist()}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
+        info += [f"coord:{coord}, indv_id:{indv.id}, fit:{indv.fitness}" for coord, indv in self.coords_and_population()]
         return "\n".join(info) + "\n"
 
     def expand_bounds(self, indvs):
