@@ -1419,7 +1419,7 @@ def find_cycle_length(arr_list):
 
 @ignore_empty_pop
 def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False,
-                         novelty_labels=None, max_mass=None, min_steps=0, **flatspin_kwargs):
+                         novelty_labels=None, max_mass=None, min_steps=0, crop_for_cycle=False, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1504,7 +1504,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         n_comp_growth = np.diff(n_comp)
 
         transient = count_unique_arrays(domains) if "transient" in novelty_labels else None
-        cycle_len = find_cycle_length(domains) if "cycle_len" in novelty_labels else None
+        cycle_len = find_cycle_length(domains if crop_for_cycle else states) if "cycle_len" in novelty_labels else None
 
         novelty = {
             "mean_mass" : mass.mean(),
