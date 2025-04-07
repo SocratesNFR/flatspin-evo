@@ -1419,7 +1419,7 @@ def find_cycle_length(arr_list):
 
 @ignore_empty_pop
 def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False,
-                         novelty_labels=None, max_mass=None, min_steps=0, crop_for_cycle=False, **flatspin_kwargs):
+                         novelty_labels=None, max_mass=None, min_steps=0, crop_for_cycle=False, max_flipped=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1498,6 +1498,9 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             return return_on_fail
 
         if max_mass is not None and np.any(mass > max_mass):
+            return return_on_fail
+
+        if max_flipped is not None and np.any(states.sum(axis=(1, 2)) > max_flipped):
             return return_on_fail
 
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
