@@ -252,7 +252,6 @@ def update_superdataset(
         return
     dataset_params = dataset_params or []
 
-    best = get_best(pop, minimize_fitness) or pop[0]
 
     for coords, indv in elite_map.coords_and_population():
         ind = dataset.index
@@ -262,7 +261,7 @@ def update_superdataset(
             )  # copy the row, use :1 range to keep as dataframe
             copy_row["gen"] = gen
             copy_row["fitness"] = indv.fitness
-            copy_row["best"] = int(indv == best)
+            copy_row["best"] = int(indv in elite_map.map)
             # dataset.index = ind.append(copy_row, ignore_index=True)
             dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
         else:
@@ -273,7 +272,7 @@ def update_superdataset(
                 gen=gen,
                 fitness=indv.fitness,
                 coords=str(coords),
-                best=int(indv == best),
+                best=int(indv in elite_map.map),
                 born=gen,
             )
             for param in dataset_params:
