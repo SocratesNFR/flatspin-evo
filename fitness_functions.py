@@ -1494,13 +1494,15 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         mass, center, wh_ratio, n_comp, domains, area = zip(*state_measures)
         mass, center, wh_ratio, n_comp, area = np.array(mass), np.array(center), np.array(wh_ratio), np.array(n_comp), np.array(area)
 
+        flipped = states.sum(axis=(1, 2))
+
         if np.isnan(center).any():
             return return_on_fail
 
         if max_mass is not None and np.any(mass > max_mass):
             return return_on_fail
 
-        if max_flipped is not None and np.any(states.sum(axis=(1, 2)) > max_flipped):
+        if max_flipped is not None and np.any(flipped > max_flipped):
             return return_on_fail
 
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
@@ -1519,6 +1521,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             "transient" : transient,
             "mean_area" : area.mean(),
             "cycle_len" : cycle_len,
+            "mean_flipped" : flipped.mean(),
         }
 
         novelty_list = [novelty[label] for label in novelty_labels]
