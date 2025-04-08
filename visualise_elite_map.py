@@ -12,6 +12,8 @@ def parse_slice(s):
     """Parse a slice string like ':', '5', '3:', '-5:-1' into a slice object."""
     if s == ":":
         return slice(None, None)
+    if ":" not in s:
+        return slice(int(s), int(s) + 1)
     parts = s.split(":")
     parts = [int(p) if p else None for p in parts]
     return slice(*parts)
