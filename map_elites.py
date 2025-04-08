@@ -197,8 +197,7 @@ class CoordMap:
 
     def __contains__(self, coords):
         """Checks if a coordinate exists in the map."""
-        index = self._coords_to_index(coords)
-        return index in self.data if index is not None else False
+        return self[coords] is not None
 
     def __repr__(self):
         """Returns a string representation of the stored data."""
