@@ -13,11 +13,12 @@ from os import path
 
 
 class Individual(one_d_geno.Individual):
-    def __init__(self, *, index_map=None, spin_count=1, **kwargs):
+    current_gen = 0
+    def __init__(self, *, index_map=None, spin_count=1, fixed_val=None, gen2size=None, **kwargs):
         assert index_map, "index_map is required"
         assert spin_count >= len(
             index_map), f"spin_count {spin_count} must be >= len(index_map) {len(index_map)}"
-        
+
         geno_size = len(index_map) + len(kwargs["genome_params"])
 
         min_len, max_len = kwargs.pop(
@@ -26,7 +27,19 @@ class Individual(one_d_geno.Individual):
 
         self.index_map = index_map
         self.spin_count = spin_count
+
+        self.fixed_val = fixed_val
+        self.gen2size = gen2size # [[0,10,20,30,40,50,60,70,80], [4,9,16,25,36,49,64,81,100]]
+        if self.gen2size:
+            assert isinstance(self.gen2size, (list, tuple)) and len(self.gen2size) == 2
+            assert len(self.gen2size[0]) == len(self.gen2size[1]), "Mismatch in gen2size dimensions"
+
+
+
+
         super().__init__(min_len=min_len, max_len=max_len, **kwargs)
+
+        self.fix()
 
     def genome2run_params(self, outdir):
         rp = super().genome2run_params()
@@ -50,6 +63,17 @@ class Individual(one_d_geno.Individual):
 
         return rp
 
+    def fix(self):
+        if self.fixed_val is None or self.gen2size is None:
+            return
+        allowed_length = self.gen2size[1][np.searchsorted(self.gen2size[0], Individual.current_gen, side="right")-1]
+        highest_index = len(self.genome_params) + allowed_length
+
+        if highest_index >= len(self.genome):
+            return
+
+        self.genome[highest_index:] = self.fixed_val
+
     @staticmethod
     def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
         sweep_list = sweep_list or [[0, 0, {}]]
@@ -64,6 +88,17 @@ class Individual(one_d_geno.Individual):
                 run_params.append(
                     dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params(outdir)))
         return run_params
+
+    def mutate(self, strength=1):
+        [child] = super().mutate(strength=strength)
+        child.fix()
+        return [child]
+
+    def crossover(self, other):
+        [child] = super().crossover(other)
+        child.fix()
+        return [child]
+
 
 
 def bitstring_to_bytes(s):

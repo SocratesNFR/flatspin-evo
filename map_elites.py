@@ -501,6 +501,7 @@ def main(
     best = None
     for gen in range(starting_gen, generation_num + 1):
         print(f"starting gen {gen} of {generation_num}")
+        individual_class.current_gen = gen
         if len(gen_times) > 0:
             tr = np.mean(gen_times[-10:]) * (generation_num - gen)
             print_time(tr)
