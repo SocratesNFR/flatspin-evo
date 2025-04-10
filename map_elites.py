@@ -71,17 +71,25 @@ class EliteMap:
         # Return the final shape coordinates
         return tuple(shape_coords.tolist())
 
-    def better_than(self, indv1, indv2):
+    def better_than(self, indv1, indv2, strict=True):
 
         if np.isnan(indv1.fitness):
             return False
         if np.isnan(indv2.fitness):
             return True
 
+        if strict:
+            if self._minimize_fitness:
+                return indv1.fitness < indv2.fitness
+            else:
+                return indv1.fitness > indv2.fitness
+
         if self._minimize_fitness:
-            return indv1.fitness < indv2.fitness
+            return indv1.fitness <= indv2.fitness
         else:
-            return indv1.fitness > indv2.fitness
+            return indv1.fitness >= indv2.fitness
+
+
 
     def add(self, indvs):
         if not indvs:
@@ -93,12 +101,17 @@ class EliteMap:
         rejects = defaultdict(list)
         for indv in indvs:
             coords = self.coords_in_map(indv.novelty)
-            if coords != None and (
-                self.map[coords] is None or self.better_than(indv, self.map[coords])
-            ):
+            if coords is None:
+                continue
+
+            current = self.map[coords]
+            if current is None or self.better_than(indv, current, strict=False):
                 self.map[coords] = indv
+                if current is not None:
+                    rejects[coords].append(current)
             else:
                 rejects[coords].append(indv)
+
         if self._target_capacity:
             self.fill_with_rejects(rejects)
 
