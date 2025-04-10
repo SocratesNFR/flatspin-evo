@@ -1415,11 +1415,17 @@ def find_cycle_length(arr_list):
 
     return len(arr_list)  # No cycle found, return max possible cycle length
 
-
+def any_border_activity(states, thickness=2):
+    """check if border has non-zero, stated should be 3d (N, W, H) """
+    return np.any(states[:, :thickness, :]) or \
+           np.any(states[:, -thickness:, :]) or \
+           np.any(states[:, :, :thickness]) or \
+           np.any(states[:, :, -thickness:])
 
 @ignore_empty_pop
 def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buffer=1, burn_in=0, spin_dir=(0,0), discard_frozen=False,
-                         novelty_labels=None, max_mass=None, min_steps=0, crop_for_cycle=False, max_flipped=None, **flatspin_kwargs):
+                         novelty_labels=None, max_mass=None, min_steps=0, crop_for_cycle=False, max_flipped=None,
+                         illegal_border_size=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
@@ -1503,6 +1509,9 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             return return_on_fail
 
         if max_flipped is not None and np.any(flipped > max_flipped):
+            return return_on_fail
+
+        if illegal_border_size is not None and any_border_activity(states, illegal_border_size):
             return return_on_fail
 
         velocity = np.linalg.norm(np.diff(center, axis=0), axis=1)
