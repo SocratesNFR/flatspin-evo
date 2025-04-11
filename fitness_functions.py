@@ -1531,6 +1531,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
             "mean_area" : area.mean(),
             "cycle_len" : cycle_len,
             "mean_flipped" : flipped.mean(),
+            "mean_log_flipped" : np.log10(flipped.mean()),
         }
 
         novelty_list = [novelty[label] for label in novelty_labels]
