@@ -461,7 +461,7 @@ def main(
     map_shape=(2, 2),
     map_bounds=None,
     map_target_capacity=None,
-    random_seed=0
+    random_seed=0,
     **kwargs,
 ):
 
