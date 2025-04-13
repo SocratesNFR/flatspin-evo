@@ -461,6 +461,7 @@ def main(
     map_shape=(2, 2),
     map_bounds=None,
     map_target_capacity=None,
+    random_seed=0
     **kwargs,
 ):
 
@@ -473,6 +474,8 @@ def main(
 
     if not os.path.isdir(outdir):
         os.makedirs(outdir)
+
+    np.random.seed(random_seed)
 
     setup_evolved_params(evolved_params, individual_class)
 
