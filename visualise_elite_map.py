@@ -97,7 +97,7 @@ def main(log_file, basepath, gens, fps, size):
 
 
 
-    figsize = np.array(size)
+    figsize = np.array(size, float)
     figsize *= 12/figsize.max()
     # Create the figure and axis
     fig, (ax, cax) = plt.subplots(figsize=figsize, ncols=2, width_ratios=[1,0.05])
