@@ -14,12 +14,12 @@ from os import path
 
 class Individual(one_d_geno.Individual):
     current_gen = 0
-    def __init__(self, *, index_map=None, spin_count=1, fixed_val=None, gen2size=None, **kwargs):
+    def __init__(self, *, index_map=None, spin_count=1, fixed_val=None, gen2size=None, stratergy_genome=None, stratergy_genome_range=None, **kwargs):
         assert index_map, "index_map is required"
         assert spin_count >= len(
             index_map), f"spin_count {spin_count} must be >= len(index_map) {len(index_map)}"
 
-        geno_size = len(index_map) + len(kwargs["genome_params"])
+        geno_size = len(index_map) + len(kwargs.get("genome_params", {}))
 
         min_len, max_len = kwargs.pop(
             "min_len", geno_size), kwargs.pop("max_len", geno_size)
@@ -35,11 +35,17 @@ class Individual(one_d_geno.Individual):
             assert len(self.gen2size[0]) == len(self.gen2size[1]), "Mismatch in gen2size dimensions"
 
 
-
-
         super().__init__(min_len=min_len, max_len=max_len, **kwargs)
 
+        self.stratergy_genome_range = stratergy_genome_range
+        if stratergy_genome is None and stratergy_genome_range is not None:
+            stratergy_genome = np.random.rand(len(self.genome_params) + 1)
+            (stratergy_genome_range[1] - stratergy_genome_range[0]) * stratergy_genome + stratergy_genome_range[0]
+
+        self.stratergy_genome = stratergy_genome
+
         self.fix()
+
 
     def genome2run_params(self, outdir):
         rp = super().genome2run_params()
@@ -90,16 +96,22 @@ class Individual(one_d_geno.Individual):
         return run_params
 
     def mutate(self, strength=1):
+
+        if self.stratergy_genome is not None:
+            strength *= ((10**self.stratergy_genome) -1)
+            strength = np.pad(strength, (0, len(self.genome) - len(strength)), mode="edge") # repeat final element unitl same size as genome
+
         [child] = super().mutate(strength=strength)
         child.fix()
+
+        if self.stratergy_genome is not None:
+            child.stratergy_genome = Individual.gauss_mutate(child.stratergy_genome, 0.01, 0, 1)
         return [child]
 
     def crossover(self, other):
         [child] = super().crossover(other)
         child.fix()
         return [child]
-
-
 
 def bitstring_to_bytes(s):
     return int(s, 2).to_bytes((len(s) + 7) // 8, byteorder='big')
