@@ -97,8 +97,10 @@ def main(log_file, basepath, gens, fps, size):
 
 
 
+    figsize = np.array(size)
+    figsize *= 12/figsize.max()
     # Create the figure and axis
-    fig, (ax, cax) = plt.subplots(figsize=(10, 10), ncols=2, width_ratios=[1,0.05])
+    fig, (ax, cax) = plt.subplots(figsize=figsize, ncols=2, width_ratios=[1,0.05])
 
 
     ax.set_xlim(0, size[0])
@@ -123,6 +125,7 @@ def main(log_file, basepath, gens, fps, size):
         ax.set_xticks(np.arange(0, size[0] + 1))
         ax.set_yticks(np.arange(0, size[1] + 1))
         ax.grid()
+        ax.set_aspect('equal', 'box')
         plt.suptitle(f"gen {gen}")
 
         norm = mcolors.Normalize(vmin=np.nanmin(df[df["gen"] == gen].fit.values), vmax=np.nanmax(df[df["gen"] == gen].fit.values))
