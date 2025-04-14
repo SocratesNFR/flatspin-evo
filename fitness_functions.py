@@ -1556,10 +1556,8 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         hc *= flatspin_kwargs.get("hc", 0.2)
         flatspin_kwargs["hc"] = hc
 
-    def condition(indv):
-        return True
 
-    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, **flatspin_kwargs)
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
     return pop
 
 @ignore_empty_pop
