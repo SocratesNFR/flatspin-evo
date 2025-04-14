@@ -19,11 +19,13 @@ class EliteMap:
         minimize_fitness=False,
         indvs=None,
         target_capacity=None,
+        strict=True
     ):
         self.shape = np.array(shape)
         self.map = CoordMap(self.shape)
         self.filler_map = CoordMap(self.shape)
         self._target_capacity = target_capacity
+        self.strict = strict
 
         if bounds is None:
             self.bounds = np.array([(0, 1)] * len(shape)).T  # Default auto bounds
@@ -105,7 +107,7 @@ class EliteMap:
                 continue
 
             current = self.map[coords]
-            if current is None or self.better_than(indv, current, strict=False):
+            if current is None or self.better_than(indv, current, strict=self.strict):
                 self.map[coords] = indv
                 if current is not None:
                     rejects[coords].append(current)
@@ -461,6 +463,7 @@ def main(
     map_bounds=None,
     map_target_capacity=None,
     random_seed=0,
+    strict_compare=True,
     **kwargs,
 ):
 
@@ -480,7 +483,7 @@ def main(
 
     elite_map = EliteMap(
         shape=map_shape, bounds=map_bounds, minimize_fitness=minimize_fitness,
-        target_capacity=map_target_capacity
+        target_capacity=map_target_capacity, strict=strict_compare,
     )
 
     if continue_run:
