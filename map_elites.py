@@ -298,7 +298,7 @@ def update_superdataset(
             )
             to_drop = [
                 col
-                for col in ["magnet_coords", "magnet_angles", "labels"]
+                for col in ["magnet_coords", "magnet_angles", "labels", "pulses"]
                 if col in ind
             ]
             ind.drop(columns=to_drop, inplace=True)  # debug
