@@ -280,13 +280,6 @@ def update_superdataset(
             ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
             ds = ds.filter(indv_id=indv.id)
             ind = ds.index
-            print(dict(
-                gen=gen,
-                fitness=indv.fitness,
-                coords=str(coords),
-                best=int(indv in elite_map.map.values()),
-                born=gen,
-            ))
             ind = ind.assign(
                 gen=gen,
                 fitness=indv.fitness,
@@ -295,11 +288,9 @@ def update_superdataset(
                 born=gen,
             )
             for param in dataset_params:
-                print(param)
                 ind[param] = [getattr(indv, param)] * len(
                     ds.index
                 )  # multiply for when group-by causes copied rows
-                print(ind[param])
 
             # patch outdir
             ind["outdir"] = ind["outdir"].apply(
@@ -320,10 +311,7 @@ def update_superdataset(
             )
             novelty_data = {name: val for name, val in zip(column_names, indv.novelty)}
             ind = ind.assign(**novelty_data)  # Efficient batch assignment
-            print(ind)
             dataset.index = pd.concat([dataset.index, ind], ignore_index=True)
-            print("-> ds:")
-            print(dataset.index)
         if not dataset.params:
             dataset.params = ds.params
 
