@@ -99,7 +99,7 @@ class Base_Individual(ABC):
             if k in ignored_attrs:
                 continue
             if Base_Individual.is_mutable(v):
-                params[k] = copy.deepcopy(v)
+                params[k] = deepcopy(v)
             else:
                 params[k] = v
 
