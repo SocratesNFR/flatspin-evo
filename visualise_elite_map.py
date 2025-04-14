@@ -38,7 +38,7 @@ def resolve_gen_range(df, gen_slice):
 
     return list(range(start, stop, step))
 
-def main(log_file, basepath, gens, fps):
+def main(log_file, basepath, gens, fps, size):
 
     with open(os.path.join(basepath, log_file), "r") as f:
         log = f.read()
@@ -99,7 +99,7 @@ def main(log_file, basepath, gens, fps):
 
     # Create the figure and axis
     fig, (ax, cax) = plt.subplots(figsize=(10, 10), ncols=2, width_ratios=[1,0.05])
-    size = (20, 20)
+
 
     ax.set_xlim(0, size[0])
     ax.set_ylim(0, size[1])
@@ -166,7 +166,8 @@ if __name__ == "__main__":
                     help="Slice like for generations")
 
     parser.add_argument('-f', '--fps', default=2, type=float)
+    parser.add_argument('-s', '--size', default=(20,20), type=int, nargs=2)
 
 
     args = parser.parse_args()
-    main(args.log, args.basepath, parse_slice(args.gen), args.fps)
+    main(args.log, args.basepath, parse_slice(args.gen), args.fps, args.size)
