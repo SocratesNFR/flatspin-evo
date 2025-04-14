@@ -91,7 +91,31 @@ class Base_Individual(ABC):
 
         self.fitness_history = deque(maxlen=self.remember_fitness) if self.remember_fitness > 0 else None
 
+    def copy(self, **override_kwargs):
+        ignored_attrs = ['id', 'gen']
+        params = {}
 
+        for k, v in vars(self).items():
+            if k in ignored_attrs:
+                continue
+            if Base_Individual.is_mutable(v):
+                params[k] = copy.deepcopy(v)
+            else:
+                params[k] = v
+
+        params.update(override_kwargs)
+        return type(self)(**params)
+
+    @staticmethod
+    def is_mutable(value):
+        return isinstance(value, (list, dict, set, np.ndarray))
+
+    @staticmethod
+    def random_range(min, max, shape=None):
+        if shape is None:
+            return min + (max - min) * np.random.rand()
+        else:
+            return min + (max - min) * np.random.rand(*shape)
 
     @abstractmethod
     def mutate(self, strength):

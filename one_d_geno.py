@@ -9,7 +9,7 @@ from collections import OrderedDict
 import evo_alg as ea
 from base_individual import Base_Individual
 import fitness_functions
-
+import copy
 
 class ProgressBar(tqdm):
     pass
@@ -43,22 +43,13 @@ class Individual(Base_Individual):
             length = self.min_len
             if self.max_len > self.min_len:
                 length = np.random.randint(self.min_len, self.max_len + 1)
-            self.genome = random_range(0, 1, [length])
+            self.genome = Individual.random_range(0, 1, [length])
 
     def __repr__(self):
         # defines which attributes are ignored by repr
         ignore_attributes = []
         return repr({k: v for (k, v) in vars(self).items() if k not in ignore_attributes})
 
-    def copy(self, **override_kwargs):
-        ignored_attrs = ['id', 'gen']
-        params = {k: v for k, v in vars(
-            self).items() if k not in ignored_attrs}
-        params.update(override_kwargs)
-        if "genome" in params:
-            params["genome"] = params["genome"].copy()
-
-        return type(self)(**params)
 
     @staticmethod
     def get_default_shared_params(outdir="", gen=None, select_param=None):
@@ -141,7 +132,7 @@ class Individual(Base_Individual):
         strength *=  0.01
         child.genome = np.random.normal(child.genome, strength)
         child.genome = np.clip(child.genome, floor, ceiling)
-        
+
     def crossover(self, other):
         child = self.line_crossover(other)
         return [child]
@@ -157,11 +148,6 @@ class Individual(Base_Individual):
         return child
 
 
-def random_range(min, max, shape=None):
-    if shape is None:
-        return min + (max - min) * np.random.rand()
-    else:
-        return min + (max - min) * np.random.rand(*shape)
 
 
 def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inner="flips", outer="default",
