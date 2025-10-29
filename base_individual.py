@@ -10,6 +10,7 @@ from collections import OrderedDict, deque
 from time import sleep
 import pandas as pd
 from itertools import count
+import traceback
 
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
 from flatspin.utils import get_default_params, import_class
@@ -445,8 +446,9 @@ def calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv):
 def handle_exception(e, queue, ds, wait=True):
     if wait:
         raise e
-    if not isinstance(e, FileNotFoundError):
+    if not isinstance(e, FileNotFoundError) and not (isinstance(e, AssertionError) and "No vector data found for quantity: mag" in str(e)):
         print(type(e), e)
+        traceback.print_exc()
     queue.append(ds)  # queue.append((indv_id, ds))
     sleep(2)
 
