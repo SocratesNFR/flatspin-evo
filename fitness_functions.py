@@ -1571,7 +1571,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
 
         if n_comp == 0:  # No foreground components
-            return 0, (np.nan, np.nan), 0, 0, None, 0
+            return 0, 0, 0
 
         domain_sizes = np.unique(components, return_counts=True)[1][1:]
 
