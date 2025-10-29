@@ -1613,7 +1613,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         if n_comp == 0:
             return return_on_fail
 
-        n_comp_growth = np.max(0, n_comp - init_n_comp)
+        n_comp_growth = max(0, n_comp - init_n_comp)
 
         novelty = {
             "mean_mass" : mean_mass,
