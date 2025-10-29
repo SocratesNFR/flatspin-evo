@@ -1588,7 +1588,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
         nonlocal grid_size, spin_dir, novelty_labels
-        t = -1
+        t = [0, -1]
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
 
         direction = np.array(spin_dir, dtype=float)
@@ -1605,10 +1605,15 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
-        n_comp, mean_mass, std_mass = measure_state_features(states[0])
+        n_comp, mean_mass, std_mass = measure_state_features(states[1])
+
+        init_n_comp, _, _ = measure_state_features(states[0])
+
 
         if n_comp == 0:
             return return_on_fail
+
+        n_comp_growth = np.max(0, n_comp - init_n_comp)
 
         novelty = {
             "mean_mass" : mean_mass,
@@ -1617,7 +1622,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
 
         novelty_list = [novelty[label] for label in novelty_labels]
 
-        fitness = n_comp
+        fitness = n_comp_growth
 
         return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
 
