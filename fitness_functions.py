@@ -1561,33 +1561,46 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     return pop
 
 @ignore_empty_pop
-def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), novelty_labels=None, **flatspin_kwargs):
+def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from skimage import measure
 
 
-    def measure_state_features(state):
+    def measure_state_features(state, measure="mass"):
         components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
 
         if n_comp == 0:  # No foreground components
             return 0, 0, 0
+
+        if measure == None:
+            return n_comp
 
         domain_sizes = np.unique(components, return_counts=True)[1][1:]
 
         if len(domain_sizes) == 0:
             return 0, 0, 0
 
-        mean_mass = domain_sizes.mean()
-        std_mass = domain_sizes.std()
+        if measure == "mass":
+            mean_mass = domain_sizes.mean()
+            std_mass = domain_sizes.std()
+            return n_comp, mean_mass, std_mass
 
-        return n_comp, mean_mass, std_mass
+        if measure == "min_wh":
+            bboxes = ndimage.find_objects(components)
+            heights = np.array([b[0].stop - b[0].start for b in bboxes if b is not None])
+            widths = np.array([b[1].stop - b[1].start for b in bboxes if b is not None])
+            min_wh = np.minimum(widths, heights)
+            return n_comp, min_wh.mean(), min_wh.std()
+
+        raise ValueError(f"Unknown measure '{measure}'")
+
 
 
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, novelty_labels
+        nonlocal grid_size, spin_dir, measure
         t = [0, -1]
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
 
@@ -1600,14 +1613,13 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
         states = dot_products > 0
 
-        if novelty_labels is None:
-            novelty_labels = ["mean_mass", "std_mass"]
+        novelty_labels = [f"mean_{measure}", f"std_{measure}"]
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
-        n_comp, mean_mass, std_mass = measure_state_features(states[1])
+        n_comp, mean, std = measure_state_features(states[1], measure=measure)
 
-        init_n_comp, _, _ = measure_state_features(states[0])
+        init_n_comp = measure_state_features(states[0], None)
 
 
         if n_comp == 0:
@@ -1616,8 +1628,8 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         n_comp_growth = max(0, n_comp - init_n_comp)
 
         novelty = {
-            "mean_mass" : mean_mass,
-            "std_mass" : std_mass,
+            f"mean_{measure}" : mean,
+            f"std_{measure}" : std,
         }
 
         novelty_list = [novelty[label] for label in novelty_labels]
