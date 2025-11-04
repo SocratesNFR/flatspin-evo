@@ -1561,7 +1561,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     return pop
 
 @ignore_empty_pop
-def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", **flatspin_kwargs):
+def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", no_edge_t=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     import skimage.measure
@@ -1601,7 +1601,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, measure
+        nonlocal grid_size, spin_dir, measure, buffer
         t = [0, -1]
         states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
 
@@ -1617,6 +1617,13 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
         novelty_labels = [f"mean_{measure}", f"std_{measure}"]
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if no_edge_t is not None:
+            test_states = load_output(ds, "mag", grid_size=grid_size, t=no_edge_t, flatten=False)
+            test_border_size = int(buffer) + 2 if buffer else 2
+
+            if any_border_activity(test_states, test_border_size):
+                return return_on_fail
 
         n_comp, mean, std = measure_state_features(states[1], measure=measure)
 
