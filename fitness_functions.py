@@ -1564,11 +1564,11 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
-    from skimage import measure
+    import skimage.measure
 
 
     def measure_state_features(state, measure="mass"):
-        components, n_comp = measure.label(state, background=0, connectivity=2, return_num=True)
+        components, n_comp = skimage.measure.label(state, background=0, connectivity=2, return_num=True)
 
         if n_comp == 0:  # No foreground components
             return 0, 0, 0
