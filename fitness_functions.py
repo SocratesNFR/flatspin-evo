@@ -1560,6 +1560,18 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
     return pop
 
+def load_states(ds, t, grid_size, spin_dir):
+    states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
+
+    direction = np.array(spin_dir, dtype=float)
+    direction /= np.linalg.norm(direction) # normalize
+
+    # Compute dot product between each magnetization vector and the direction
+    dot_products = np.einsum('...i,i->...', states, direction)  # Efficient batch dot product
+
+    # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
+    return dot_products > 0
+
 @ignore_empty_pop
 def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", no_edge_t=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
@@ -1603,23 +1615,14 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     def fit_func(ds):
         nonlocal grid_size, spin_dir, measure, buffer
         t = [0, -1]
-        states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
-
-        direction = np.array(spin_dir, dtype=float)
-        direction /= np.linalg.norm(direction) # normalize
-
-        # Compute dot product between each magnetization vector and the direction
-        dot_products = np.einsum('...i,i->...', states, direction)  # Efficient batch dot product
-
-        # Map values: Positive -> 1 (aligned), Perpendicular or opposite -> 0
-        states = dot_products > 0
+        states = load_states(ds, t, grid_size, spin_dir)
 
         novelty_labels = [f"mean_{measure}", f"std_{measure}"]
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
         if no_edge_t is not None:
-            test_states = load_output(ds, "mag", grid_size=grid_size, t=no_edge_t, flatten=False)
+            test_states = load_states(ds, no_edge_t, grid_size, spin_dir)
             test_border_size = int(buffer) + 2 if buffer else 2
 
             if any_border_activity(test_states, test_border_size):
