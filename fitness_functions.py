@@ -1570,11 +1570,12 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     def measure_state_features(state, measure="mass"):
         components, n_comp = skimage.measure.label(state, background=0, connectivity=2, return_num=True)
 
+        if measure == None:
+            return n_comp
+
         if n_comp == 0:  # No foreground components
             return 0, 0, 0
 
-        if measure == None:
-            return n_comp
 
         domain_sizes = np.unique(components, return_counts=True)[1][1:]
 
