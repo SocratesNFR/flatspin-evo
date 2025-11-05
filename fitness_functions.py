@@ -1573,13 +1573,20 @@ def load_states(ds, t, grid_size, spin_dir):
     return dot_products > 0
 
 @ignore_empty_pop
-def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", no_edge_t=None, **flatspin_kwargs):
+def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), measure="mass", gap=0, no_edge_t=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     import skimage.measure
 
 
-    def measure_state_features(state, measure="mass"):
+    def measure_state_features(state, measure="mass", gap=0):
+        assert gap < 2, "only gap=0 or 1 implemented"
+        if gap == 1:
+            structure = np.array([[0, 1, 1],
+                                  [0, 1, 1],
+                                  [0, 0, 0]], dtype=bool)
+            state = ndimage.binary_dilation(state, structure=structure)
+
         components, n_comp = skimage.measure.label(state, background=0, connectivity=2, return_num=True)
 
         if measure == None:
@@ -1618,7 +1625,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, measure, buffer
+        nonlocal grid_size, spin_dir, measure, buffer, gap
         t = [0, -1]
         states = load_states(ds, t, grid_size, spin_dir)
 
@@ -1633,9 +1640,9 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
             if any_border_activity(test_states, test_border_size):
                 return return_on_fail
 
-        n_comp, mean, std = measure_state_features(states[1], measure=measure)
+        n_comp, mean, std = measure_state_features(states[1], measure=measure, gap=gap)
 
-        init_n_comp = measure_state_features(states[0], None)
+        init_n_comp = measure_state_features(states[0], None, gap)
 
 
         if n_comp == 0:
