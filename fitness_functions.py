@@ -1606,6 +1606,11 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
             min_wh = np.minimum(widths, heights)
             return n_comp, min_wh.mean(), min_wh.std()
 
+        if measure == "minor_axis":
+            props = skimage.measure.regionprops(components)
+            minor_axes =  np.array([p.minor_axis_length for p in props])
+            return n_comp, minor_axes.mean(), minor_axes.std()
+
         raise ValueError(f"Unknown measure '{measure}'")
 
 
