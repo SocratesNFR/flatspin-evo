@@ -1680,6 +1680,81 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     return pop
 
 @ignore_empty_pop
+def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), no_edge_t=None, burn_in=None, state_step=None, **flatspin_kwargs):
+    # requires map_shape (n1, n2, n3, n4)
+    from scipy import ndimage
+    from scipy.stats import mode, wasserstein_distance
+    import skimage.measure
+
+
+    def measure_state_features(state):
+        components, n_comp = skimage.measure.label(state, background=0, connectivity=2, return_num=True)
+        if n_comp == 0:  # No foreground components
+            return []
+
+        domain_sizes = np.unique(components, return_counts=True)[1][1:]
+
+        return domain_sizes
+
+
+
+    if grid_size is None:
+        grid_size = flatspin_kwargs["size"]
+    def fit_func(ds):
+        nonlocal grid_size, spin_dir, buffer, burn_in, state_step
+        t=slice(burn_in, None, state_step)
+        states = load_states(ds, t, grid_size, spin_dir)
+
+
+        novelty_labels = ["mode_n_comp", "mode_mass"]
+        return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if no_edge_t is not None:
+            test_states = load_states(ds, no_edge_t, grid_size, spin_dir)
+            test_border_size = int(buffer) + 2 if buffer else 2
+
+            if any_border_activity(test_states, test_border_size):
+                return return_on_fail
+
+        domain_sizes_list = [measure_state_features(state) for state in states]
+
+        n_comps = [len(dom_size) for dom_size in domain_sizes_list]
+        if 0 in n_comps:
+            return return_on_fail
+
+
+        novelty = {
+            f"mode_n_comp" : mode(n_comps)[0],
+            f"mode_mass" : mode(np.concatenate(domain_sizes_list))[0]
+        }
+
+        novelty_list = [novelty[lab] for lab in novelty_labels]
+        fitness = sum(
+                        wasserstein_distance(domain_sizes_list[i], domain_sizes_list[i+1])
+                        for i in range(len(domain_sizes_list)-1)
+                     )
+
+        return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
+
+    #buffer
+    if buffer:
+        buff_thick = int(buffer)
+
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+        hc[:buff_thick, :] = 100
+        hc[-buff_thick:, :] = 100
+        hc[:, :buff_thick] = 100
+        hc[:, -buff_thick:] = 100
+
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+        flatspin_kwargs["hc"] = hc
+
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
+    return pop
+
+@ignore_empty_pop
 @scaling_param
 def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=None, buffer=True, burn_in=0, tessellate=None, polar=True, weight_componenets=False, **flatspin_kwargs):
 
@@ -1799,4 +1874,5 @@ known_fits={
     "reproduce": reproduce_fitness,
     "novelty_life": novelty_life_fitness,
     "novelty_proliferate": novelty_proliferate_fitness,
+    "novelty_many_creatures": novelty_many_creatures_fitness,
 }
