@@ -1680,7 +1680,7 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     return pop
 
 @ignore_empty_pop
-def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), no_edge_t=None, burn_in=None, state_step=None, **flatspin_kwargs):
+def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), no_edge_t=None, burn_in=None, state_step=None, discard_frozen=False, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from scipy.stats import mode, wasserstein_distance
@@ -1708,6 +1708,11 @@ def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, s
 
         novelty_labels = ["mode_n_comp", "mode_mass"]
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if discard_frozen:
+            # Check if first two states are identical
+            if np.all(states[0] == states[1]):
+                return return_on_fail
 
         if no_edge_t is not None:
             test_states = load_states(ds, no_edge_t, grid_size, spin_dir)
