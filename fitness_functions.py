@@ -1679,8 +1679,15 @@ def novelty_proliferate_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
     return pop
 
+def trend_direction(y_values):
+    diffs = [y_values[i+1] - y_values[i] for i in range(len(y_values)-1)]
+    mean_diff = sum(diffs) / len(diffs)
+
+    return mean_diff
+
 @ignore_empty_pop
-def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), no_edge_t=None, burn_in=None, state_step=None, discard_frozen=False, **flatspin_kwargs):
+def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, spin_dir=(0,0), no_edge_t=None, burn_in=None, state_step=None, discard_frozen=False,
+                                   novelty_labels=None, **flatspin_kwargs):
     # requires map_shape (n1, n2, n3, n4)
     from scipy import ndimage
     from scipy.stats import mode, wasserstein_distance
@@ -1705,8 +1712,8 @@ def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, s
         t=slice(burn_in, None, state_step)
         states = load_states(ds, t, grid_size, spin_dir)
 
-
-        novelty_labels = ["mode_n_comp", "mode_mass"]
+        if novelty_labels == None:
+            novelty_labels = ["n_comp_increase", "mode_mass"]
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
         if discard_frozen:
@@ -1729,8 +1736,9 @@ def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, s
 
 
         novelty = {
-            f"mode_n_comp" : mode(n_comps)[0],
-            f"mode_mass" : mode(np.concatenate(domain_sizes_list))[0]
+            "mode_n_comp" : mode(n_comps)[0],
+            "mode_mass" : mode(np.concatenate(domain_sizes_list))[0],
+            "n_comp_grad" : max(trend_direction(n_comps), 0)
         }
 
         novelty_list = [novelty[lab] for lab in novelty_labels]
