@@ -1713,7 +1713,7 @@ def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, s
         states = load_states(ds, t, grid_size, spin_dir)
 
         if novelty_labels == None:
-            novelty_labels = ["n_comp_increase", "mode_mass"]
+            novelty_labels = ["mode_n_comp", "mode_mass"]
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
         if discard_frozen:
