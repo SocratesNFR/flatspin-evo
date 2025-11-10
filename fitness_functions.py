@@ -1708,7 +1708,7 @@ def novelty_many_creatures_fitness(pop, gen, outdir, grid_size=None, buffer=1, s
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, buffer, burn_in, state_step
+        nonlocal grid_size, spin_dir, buffer, burn_in, state_step, novelty_labels
         t=slice(burn_in, None, state_step)
         states = load_states(ds, t, grid_size, spin_dir)
 
