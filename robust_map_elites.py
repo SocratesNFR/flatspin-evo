@@ -38,7 +38,7 @@ class RobustEliteMap(EliteMap):
 
     def clean_up(self):
         """remove indivudals for the fitness archive that are no longer needed"""
-        valid_ids = set(indv.id for indv in self.population(fill=True))
+        valid_ids = set(indv.id for indv in self.population() + list(self._rejects_queue))
         archive_ids = set(self._fitness_archive._archive.keys())
 
         ids_to_remove = archive_ids - valid_ids
