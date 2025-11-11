@@ -450,8 +450,8 @@ def main(
         best = elite_map.get_best()
 
         if best is not None:
-            print(f"best fitness: {best.fitness}")
-            print(f"  with novelty measures: {best.novelty}\n")
+            print(f"best fitness: {elite_map._fitness_archive[best.id].mean_fitness}")
+            print(f"  with novelty coords: {elite_map._fitness_archive[best.id].mode_coord}\n")
 
         print(
             f"{len(dataset.index[dataset.index['born'] == gen])} new individuals added to map"
