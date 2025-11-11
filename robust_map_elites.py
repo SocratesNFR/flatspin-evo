@@ -244,7 +244,7 @@ def update_superdataset(
                 ind[ind["indv_id"] == indv.id].iloc[:1].copy()
             )  # copy the row, use :1 range to keep as dataframe
             copy_row["gen"] = gen
-            copy_row["fitness"] = indv.fitness
+            copy_row["fitness"] = elite_map._fitness_archive[indv.id].mean_fitness
             copy_row["best"] = 1 # TODO: more meaningfull best
             # dataset.index = ind.append(copy_row, ignore_index=True)
             dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
@@ -254,7 +254,7 @@ def update_superdataset(
             ind = ds.index
             ind = ind.assign(
                 gen=gen,
-                fitness=indv.fitness,
+                fitness=elite_map._fitness_archive[indv.id].mean_fitness,
                 coords=str(coords),
                 best=1, # TODO: more meaningfull best
                 born=gen,
@@ -390,10 +390,12 @@ def main(
 
         parent_pool = elite_map.population(fill=True)
         # replace nan parents with new random
+        if len(parent_pool) < pop_size:
+            parent_pool += [individual_class(gen=gen, **individual_params) for _ in range(pop_size - len(parent_pool))]
         parent_pool = [
             (
                 parent
-                if parent.fitness != np.nan
+                if not np.isnan(elite_map._fitness_archive[parent.id].mean_fitness)
                 else individual_class(gen=gen, **individual_params)
             )
             for parent in parent_pool
