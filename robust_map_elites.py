@@ -390,8 +390,6 @@ def main(
 
         parent_pool = elite_map.population(fill=True)
         # replace nan parents with new random
-        if len(parent_pool) < pop_size:
-            parent_pool += [individual_class(gen=gen, **individual_params) for _ in range(pop_size - len(parent_pool))]
         parent_pool = [
             (
                 parent
@@ -400,6 +398,10 @@ def main(
             )
             for parent in parent_pool
         ]
+
+        if len(parent_pool) < pop_size:
+            parent_pool += [individual_class(gen=gen, **individual_params) for _ in range(pop_size - len(parent_pool))]
+
         mut_parents = choose(parent_pool, size=int(pop_size * mut_prob))
         for parent in mut_parents:
             mut_kids += parent.mutate(mut_strength)
