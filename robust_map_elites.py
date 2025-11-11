@@ -95,7 +95,7 @@ class RobustEliteMap(EliteMap):
             return True
 
         # if challenger mean fitness is nan or challenger has less evals than elite, elite wins
-        if np.isnan(ch_record.mean_fitness) or len(ch_record.fitness) < len(elite.fitness):
+        if np.isnan(ch_record.mean_fitness) or len(ch_record.fitness) < len(elite_record.fitness):
             return False
 
         # if unequal mode_count, the higher mode_count wins
