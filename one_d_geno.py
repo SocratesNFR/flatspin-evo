@@ -151,7 +151,7 @@ class Individual(Base_Individual):
 
 
 def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inner="flips", outer="default",
-                minimize_fitness=True, calculate_fit_only=False, map_elite=False, **kwargs):
+                minimize_fitness=True, calculate_fit_only=False, map_elite=False, robust_map_elite=False, **kwargs):
     known_fits = {
 
     }  # genotype-specific fitnesses
@@ -164,6 +164,10 @@ def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inne
     if map_elite:
         import map_elites
         return map_elites.main(outdir, individual_class, inner, minimize_fitness, **kwargs)
+
+    if robust_map_elite:
+        import robust_map_elites
+        return robust_map_elites.main(outdir, individual_class, inner, minimize_fitness, **kwargs)
 
     if calculate_fit_only:
         return ea.only_run_fitness_func(outdir, individual_class, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
@@ -180,6 +184,8 @@ def main(individual_class=Individual):
                         help="""a flatspin parameter to be controlled by a gene in the genome, format: -g param_name=[low, high] """)
     parser.add_argument("--map-elite", action="store_true",
                         help="use map-elites algorithm", default=False)
+    parser.add_argument("--robust-map-elite", action="store_true",
+                        help="use roubust map-elites algorithm", default=False)
 
     args = parser.parse_args()
 
@@ -206,7 +212,8 @@ def main(individual_class=Individual):
         repeat_spec=args.repeat_spec,
         group_by=args.group_by,
         calculate_fit_only=args.calculate_fit_only,
-        map_elite=args.map_elite
+        map_elite=args.map_elite,
+        robust_map_elite=args.robust_map_elite
     )
 
 

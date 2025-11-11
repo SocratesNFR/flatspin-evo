@@ -140,7 +140,7 @@ class EliteMap:
                     continue
 
                 # Pick the best individual from the list
-                best_indv = get_best(rejects[coords], self._minimize_fitness, True)
+                best_indv = self.get_best(rejects[coords], return_nan=True)
                 if self.filler_map[coords]:
                     self.filler_map[coords].append(best_indv)
                 else:
@@ -192,18 +192,40 @@ class EliteMap:
         self.map.clear()
         self.add(indvs)
 
+    def log(self, basepath="", gen=None):
+        with open(os.path.join(basepath, "elite_map.log"), "a") as f:
+            f.write(self.info_dump(gen=gen))
+
+
+    def get_best(self, indvs=None, minimize_fitness=None, return_nan=False):
+        if indvs is None:
+            indvs = self.population()
+        if minimize_fitness == None:
+            minimize_fitness = self._minimize_fitness
+        better = min if minimize_fitness else max
+        best = better(
+            filter(lambda indv: not np.isnan(indv.fitness), indvs),
+            key=lambda indv: indv.fitness,
+            default=None,  # Handle case where all values are NaN
+        )
+        if return_nan:
+            return best or indvs[0] # all nan so return first
+        return best
+
 
 class CoordMap:
     def __init__(self, shape):
         self.shape = np.array(shape)  # (height, width)
         self.data = {}  # Internal dictionary to store values
         self._cache_values = None
+        self._cache_ids = None
 
     def __setitem__(self, coords, value):
         """Sets a value in the map at the given coordinate if it's valid."""
         coords = self.validate_coords(coords)
         self.data[coords] = value
         self._cache_values = None
+        self._cache_ids = None
 
     def __getitem__(self, coords):
         """Gets a value from the map at the given coordinate if it's valid."""
@@ -245,6 +267,11 @@ class CoordMap:
             self._cache_values = list(self.data.values())
         return self._cache_values
 
+    def id_set(self):
+        if self._cache_ids is None:
+            self._cache_ids = set(indv.id for indv in self.data.values())
+        return self._cache_ids
+
     def items(self):
         """Returns the items of the internal dictionary."""
         return self.data.items()
@@ -252,6 +279,7 @@ class CoordMap:
     def clear(self):
         self.data.clear()
         self._cache_values = None
+        self._cache_ids = None
 
     def __len__(self):
         return len(self.data)
@@ -424,20 +452,7 @@ def choose(lst, size):
     return [lst[i] for i in chosen]
 
 
-def get_best(indvs, minimize_fitness, return_nan=False):
-    better = min if minimize_fitness else max
-    best = better(
-        filter(lambda indv: not np.isnan(indv.fitness), indvs),
-        key=lambda indv: indv.fitness,
-        default=None,  # Handle case where all values are NaN
-    )
-    if return_nan:
-        return best or indvs[0] # all nan so return first
-    return best
 
-def log_elite_map(elite_map, basepath="", gen=None):
-    with open(os.path.join(basepath, "elite_map.log"), "a") as f:
-        f.write(elite_map.info_dump(gen=gen))
 
 
 def main(
@@ -512,7 +527,7 @@ def main(
         dataset = Dataset(index, None, info, basepath=outdir)
 
         update_superdataset(dataset, outdir, elite_map, 0, minimize_fitness, dataset_params)
-        log_elite_map(elite_map, outdir, 0)
+        elite_map.log(outdir, 0)
         dataset.save()
 
     gen_times = []
@@ -576,9 +591,9 @@ def main(
             dataset, outdir, elite_map, gen, minimize_fitness, dataset_params
         )
         dataset.save()
-        log_elite_map(elite_map, outdir, gen)
+        elite_map.log(outdir, gen)
 
-        best = get_best(elite_map.population(), minimize_fitness)
+        best = elite_map.get_best()
 
         if best is not None:
             print(f"best fitness: {best.fitness}")

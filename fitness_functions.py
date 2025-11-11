@@ -1445,7 +1445,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         biggest_center = ndimage.center_of_mass(domain)
         # plt.plot(biggest_center[1], biggest_center[0], 'ro')
 
-        bbox = ndimage.find_objects(domain, 0)[0]
+        bbox = ndimage.find_objects(domain.astype(int), 0)[0]
         # plt.imshow(domain[bbox], cmap='gray')
         h, w = bbox[0].stop - bbox[0].start, bbox[1].stop - bbox[1].start
         wh_ratio = (w-h) /(w+h)
@@ -1475,8 +1475,8 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
 
         if novelty_labels is None:
             novelty_labels = ["mean_log_mass", "mean_velocity", "mean_wh", "mean_ncomp"]
-
-        return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+        novelty_labels = tuple(novelty_labels)
+        return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=tuple([0] * len(novelty_labels)))
 
         if min_steps:
             stats = read_table(ds.tablefile("stat"))
@@ -1540,7 +1540,7 @@ def novelty_life_fitness(pop, gen, outdir, grid_size=None, state_step=None, buff
         # fitness = np.std(mass)
         fitness = np.std(flipped)
 
-        return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
+        return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=tuple(novelty_list))
 
     #buffer
     if buffer:

@@ -35,7 +35,7 @@ class Base_Individual(ABC):
 
     def __init__(self, *, id=None, gen=0, fitness=None, fitness_components=None, fitness_info=None,
                 parent_ids=None, evolved_params_values=None, remember_fitness=0, fitness_history=None,
-                **kwargs):
+                last_random_seed=0, **kwargs):
 
         self.id = id if id is not None else next(Base_Individual._id_counter)
         self.gen = gen  # generation of birth
@@ -57,8 +57,12 @@ class Base_Individual(ABC):
             self.fitness_history = fitness_history
 
         self.init_evolved_params(evolved_params_values)
+        self.last_random_seed = last_random_seed
 
 
+    def next_seed(self):
+        self.last_random_seed += 1
+        return self.last_random_seed
 
     @classmethod
     def set_evolved_params(cls, evolved_params):
@@ -93,7 +97,7 @@ class Base_Individual(ABC):
         self.fitness_history = deque(maxlen=self.remember_fitness) if self.remember_fitness > 0 else None
 
     def copy(self, **override_kwargs):
-        ignored_attrs = ['id', 'gen']
+        ignored_attrs = ['id', 'gen', 'last_random_seed']
         params = {}
 
         for k, v in vars(self).items():
@@ -237,7 +241,7 @@ class Base_Individual(ABC):
     @classmethod
     def flatspin_eval(cls, fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, use_default_shared_params=True,
                     sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                    repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, **flatspin_kwargs):
+                    repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, repeat_dict={}, reuse_gen=False, **flatspin_kwargs):
         """
         fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
         if an Individual already has fitness components the value(s) will be appended
@@ -263,14 +267,32 @@ class Base_Individual(ABC):
         if preprocessing:
             run_params = preprocessing(run_params)
 
+        id2indv = {individual.id: individual for individual in pop}
+        if repeat_dict:
+            extra_rps = []
+            for rp in run_params:
+                id = rp["indv_id"]
+                sub_run_name = rp["sub_run_name"]
+                repeats = repeat_dict.get(id, 0)
+                if not repeats:
+                    continue
+                indv = id2indv[id]
+                seed = indv.next_seed()
+                rp["random_seed"] = seed
+                rp["sub_run_name"] = f"{sub_run_name}_rseed{seed}"
+                for i in range(repeats-1):
+                    extra_rps.append(copy(rp))
+                    seed = indv.next_seed()
+                    extra_rps[-1]["random_seed"] = seed
+                    extra_rps[-1]["sub_run_name"] = f"{sub_run_name}_rseed{seed}"
+            run_params += extra_rps
         run_type = shared_params.get("run", "local")
         if len(run_params) > 0:
-            id2indv = {individual.id: individual for individual in pop}
             evolved_params = [
                 id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
             ]
             wait = run_type == "local" or group_by
-            cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
+            cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params, reuse_gen=reuse_gen)
             dataset = Dataset.read(shared_params["basepath"])
 
             process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait)
@@ -290,7 +312,7 @@ class Base_Individual(ABC):
 
 
     @classmethod
-    def evo_run(cls, runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}):
+    def evo_run(cls, runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}, reuse_gen=False):
         """modified from run_sweep.py main()"""
         if not evolved_params:
             evolved_params = []
@@ -319,10 +341,11 @@ class Base_Individual(ABC):
         outdir_tpl = "gen{:d}indv{:d}"
 
         basepath = params["basepath"]
-        if os.path.exists(basepath):
-            # Refuse to overwrite an existing dataset
-            raise FileExistsError(basepath)
-        os.makedirs(basepath)
+        if not reuse_gen:
+            if os.path.exists(basepath):
+                # Refuse to overwrite an existing dataset
+                raise FileExistsError(basepath)
+            os.makedirs(basepath)
 
         index = []
         filenames = []
@@ -425,9 +448,18 @@ def calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv):
     fit_components = fit_func(ds)
     indv = id2indv[indv_id]
 
-    if isinstance(fit_components, dict):
+    if isinstance(fit_components, dict): # if a dict assign the values, if values already exist appends values (if not a list already make it a list)
         for k, v in fit_components.items():
-            setattr(indv, k, v)
+            if isinstance(v, list):
+                v = tuple(v)
+            if not hasattr(indv, k) or getattr(indv, k) is None:
+                setattr(indv, k, v)
+            else:
+                current_v = getattr(indv, k)
+                if isinstance(current_v, list):
+                    current_v.append(v)
+                else:
+                    setattr(indv, k, [current_v, v])
         return
 
 
@@ -446,7 +478,9 @@ def calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv):
 def handle_exception(e, queue, ds, wait=True):
     if wait:
         raise e
-    if not isinstance(e, FileNotFoundError) and not (isinstance(e, AssertionError) and "No vector data found for quantity: mag" in str(e)):
+    if (not isinstance(e, FileNotFoundError) and
+        not (isinstance(e, AssertionError) and "No vector data found for quantity: mag" in str(e)) and
+        not "Bad magic number" in str(e)):
         print(type(e), e)
         traceback.print_exc()
     queue.append(ds)  # queue.append((indv_id, ds))
