@@ -62,7 +62,7 @@ class RobustEliteMap(EliteMap):
         updated_elites, challengers = self.split_elites(indvs)
 
         # if any elites nolonger on right place, remove them (hold onto them to let them challenge others)
-        for coord, elite in self.map.items():
+        for coord, elite in list(self.map.items()):
             if self._fitness_archive[elite.id].mode_coord != coord:
                 challengers.append(elite)
                 self.map.pop(coord)
