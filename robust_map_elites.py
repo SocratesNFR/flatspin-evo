@@ -65,7 +65,7 @@ class RobustEliteMap(EliteMap):
         for coord, elite in self.map.items():
             if self._fitness_archive[elite.id].mode_coord != coord:
                 challengers.append(elite)
-                self.map[coord] = None
+                self.map.pop(coord)
 
         for challenger in challengers:
             self.try_add(challenger)

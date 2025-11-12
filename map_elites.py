@@ -284,6 +284,14 @@ class CoordMap:
     def __len__(self):
         return len(self.data)
 
+    def pop(self, coords, default=None):
+        """Removes an item from the map and clears relevant caches."""
+        coords = self.validate_coords(coords)
+        val = self.data.pop(coords, default)
+        self._cache_values = None
+        self._cache_ids = None
+        return val
+
 
 def update_superdataset(
     dataset, outdir, elite_map, gen, minimize_fitness=True, dataset_params=None
