@@ -236,6 +236,11 @@ def update_superdataset(
         return
     dataset_params = dataset_params or []
 
+    subgen = ""
+    if type(gen) is str:
+        gen, *subgen = gen.split("_", 1)
+        gen = int(gen)
+        subgen = subgen[0] if subgen else ""
 
     for coords, indv in elite_map.map.items():
         ind = dataset.index
@@ -249,7 +254,8 @@ def update_superdataset(
             # dataset.index = ind.append(copy_row, ignore_index=True)
             dataset.index = pd.concat([dataset.index, copy_row], ignore_index=True)
         else:
-            ds = Dataset.read(os.path.join(outdir, f"gen{indv.gen}"))
+            gen_path = f"gen{indv.gen}_{subgen}" if subgen else f"gen{indv.gen}"
+            ds = Dataset.read(os.path.join(outdir, gen_path))
             ds = ds.filter(indv_id=indv.id)
             ind = ds.index
             ind = ind.assign(
@@ -433,13 +439,12 @@ def main(
         evaluees, repeat_dict = elite_map.needed_runs(kids)
         evaluate_inner(
             evaluees,
-            gen,
+            f"{gen}_b",
             outdir,
             sweep_params=sweep_params,
             group_by=group_by,
             dependent_params=dependent_params,
             repeat_dict=repeat_dict,
-            reuse_gen=True,
             **kwargs,
         )
 

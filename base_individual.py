@@ -241,7 +241,7 @@ class Base_Individual(ABC):
     @classmethod
     def flatspin_eval(cls, fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, use_default_shared_params=True,
                     sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                    repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, repeat_dict={}, reuse_gen=False, **flatspin_kwargs):
+                    repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, repeat_dict={}, **flatspin_kwargs):
         """
         fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
         if an Individual already has fitness components the value(s) will be appended
@@ -292,7 +292,7 @@ class Base_Individual(ABC):
                 id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
             ]
             wait = run_type == "local" or group_by
-            cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params, reuse_gen=reuse_gen)
+            cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
             dataset = Dataset.read(shared_params["basepath"])
 
             process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait)
@@ -312,7 +312,7 @@ class Base_Individual(ABC):
 
 
     @classmethod
-    def evo_run(cls, runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}, reuse_gen=False):
+    def evo_run(cls, runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}):
         """modified from run_sweep.py main()"""
         if not evolved_params:
             evolved_params = []
@@ -341,11 +341,11 @@ class Base_Individual(ABC):
         outdir_tpl = "gen{:d}indv{:d}"
 
         basepath = params["basepath"]
-        if not reuse_gen:
-            if os.path.exists(basepath):
-                # Refuse to overwrite an existing dataset
-                raise FileExistsError(basepath)
-            os.makedirs(basepath)
+
+        if os.path.exists(basepath):
+            # Refuse to overwrite an existing dataset
+            raise FileExistsError(basepath)
+        os.makedirs(basepath)
 
         index = []
         filenames = []
@@ -364,7 +364,8 @@ class Base_Individual(ABC):
                 run_params.update(dp)
 
             sub_run_name = newparams.get("sub_run_name", "x")
-            outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
+            # outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
+            outdir = f"gen{gen}indv{newparams['indv_id']}{sub_run_name}.{ext}"
             filenames.append(outdir)
             row = OrderedDict(run_params)
             row.update({"outdir": outdir})
