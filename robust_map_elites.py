@@ -102,7 +102,7 @@ class RobustEliteMap(EliteMap):
         if ch_record.mode_count != elite_record.mode_count:
             return ch_record.mode_count > elite_record.mode_count
 
-        return ch_record.mean_fitness > elite_record.mean_fitness
+        return self.is_fitter(challenger, elite)
 
     def needed_runs(self, indvs):
         """Work out how many more times each individual should be evaluated.
@@ -113,12 +113,17 @@ class RobustEliteMap(EliteMap):
         repeat_dict = {}
         elite_ids = set()
         to_be_evaluated = []
+        keepers = []
 
         self._fitness_archive.update_many(indvs, self) # required because this is called after an evaluate inner but before an elite_map.update()
         for indv in indvs:
             coords = self._fitness_archive[indv.id].mode_coord
             elite = self.map[coords]
             if elite is None: # no elite to challenge, so no further runs needed
+                keepers.append(indv)
+                continue
+
+            if not self.is_fitter(indv, elite): # challenger not better than elite in initial runs, so no further runs needed
                 continue
 
             if elite.id not in elite_ids:
@@ -134,7 +139,7 @@ class RobustEliteMap(EliteMap):
         for el_id in elite_ids:
             repeat_dict[el_id] = 1
 
-        return to_be_evaluated, repeat_dict
+        return to_be_evaluated, repeat_dict, keepers
 
     def get_best(self, indvs=None, minimize_fitness=None, return_nan=False):
         if indvs is None:
@@ -152,6 +157,19 @@ class RobustEliteMap(EliteMap):
             return best or indvs[0] # all nan so return first
         return best
 
+    def is_fitter(self, indv1, indv2):
+        fit1 = self._fitness_archive[indv1.id].mean_fitness
+        fit2 = self._fitness_archive[indv2.id].mean_fitness
+
+        if np.isnan(fit1):
+            return False
+        if np.isnan(fit2):
+            return True
+
+        if self._minimize_fitness:
+            return fit1 < fit2
+        else:
+            return fit1 > fit2
 
 def tuple_mode(l, return_indices=False):
     """finds most common tuple and return the tuple and its count"""
@@ -436,7 +454,7 @@ def main(
 
         # check how many reruns for kids, and elites
         print("    Evaluate p2")
-        evaluees, repeat_dict = elite_map.needed_runs(kids)
+        evaluees, repeat_dict, keepers = elite_map.needed_runs(kids)
         evaluate_inner(
             evaluees,
             f"{gen}_b",
@@ -448,7 +466,7 @@ def main(
             **kwargs,
         )
 
-        elite_map.update(evaluees)
+        elite_map.update(evaluees + keepers)
 
         update_superdataset(
             dataset, outdir, elite_map, gen, minimize_fitness, dataset_params
