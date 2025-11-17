@@ -58,7 +58,6 @@ class RobustEliteMap(EliteMap):
         return elites, others
 
     def update(self, indvs):
-        self._fitness_archive.update_many(indvs, self)
         updated_elites, challengers = self.split_elites(indvs)
 
         # if any elites nolonger on right place, remove them (hold onto them to let them challenge others)
@@ -104,6 +103,10 @@ class RobustEliteMap(EliteMap):
 
         return self.is_fitter(challenger, elite)
 
+
+    def update_archive(self, indvs):
+        self._fitness_archive.update_many(indvs, self)
+
     def needed_runs(self, indvs):
         """Work out how many more times each individual should be evaluated.
 
@@ -115,7 +118,6 @@ class RobustEliteMap(EliteMap):
         to_be_evaluated = []
         keepers = []
 
-        self._fitness_archive.update_many(indvs, self) # required because this is called after an evaluate inner but before an elite_map.update()
         for indv in indvs:
             coords = self._fitness_archive[indv.id].mode_coord
             elite = self.map[coords]
@@ -384,7 +386,7 @@ def main(
             repeat_dict=repeat_dict,
             **kwargs,
         )
-
+        elite_map.update_archive(init_pop)
         elite_map.update(init_pop)
 
         # create superdataset
@@ -451,6 +453,7 @@ def main(
             repeat_dict=repeat_dict,
             **kwargs,
         )
+        elite_map.update_archive(kids)
 
         # check how many reruns for kids, and elites
         print("    Evaluate p2")
@@ -465,7 +468,7 @@ def main(
             repeat_dict=repeat_dict,
             **kwargs,
         )
-
+        elite_map.update_archive(evaluees)
         elite_map.update(evaluees + keepers)
 
         update_superdataset(
