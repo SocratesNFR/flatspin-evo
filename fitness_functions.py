@@ -66,7 +66,7 @@ def ignore_NaN_fits(func):
     def wrapper(outer_pop, *args, **kwargs):
         non_nans = []
         for indv in outer_pop:
-            print(indv.fitness_components)
+            # print(indv.fitness_components)
             if np.isnan(indv.fitness_components).any():
                 indv.fitness = np.nan
             else:
@@ -1866,6 +1866,8 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
 
     def measure_state_features(state):
         points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
+        if len(points) == 0:
+            return None, None
         dists = np.linalg.norm(points, axis=1)
         max_point =  points[np.argmax(dists)]
         min_point =  points[np.argmin(dists)]
@@ -1895,6 +1897,8 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
                 return return_on_fail
 
         max_point, min_point = measure_state_features(states[1])
+        if max_point is None or min_point is None:
+            return return_on_fail
 
         novelty = {
             "max_x" : max_point[0],
