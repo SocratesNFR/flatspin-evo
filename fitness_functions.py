@@ -1858,6 +1858,72 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
 
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=condition, preprocessing=preprocessing, **flatspin_kwargs)
     return pop
+
+
+@ignore_empty_pop
+def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None, **flatspin_kwargs):
+
+    def measure_state_features(state):
+        points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
+        dists = np.linalg.norm(points, axis=1)
+        max_point =  points[np.argmax(dists)]
+        min_point =  points[np.argmin(dists)]
+
+        return max_point, min_point
+
+    if grid_size is None:
+        grid_size = flatspin_kwargs["size"]
+
+    def fit_func(ds):
+        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t
+        t = [-1-state_step, -1]
+        states = load_states(ds, t, grid_size, spin_dir)
+
+        novelty_labels = ["max_x","max_y","min_x","min_y"]
+        return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if np.allclose(states[0], states[1]):
+            return return_on_fail
+
+
+        if no_edge_t is not None:
+            test_states = load_states(ds, no_edge_t, grid_size, spin_dir)
+            test_border_size = int(buffer) + 2 if buffer else 2
+
+            if any_border_activity(test_states, test_border_size):
+                return return_on_fail
+
+        max_point, min_point = measure_state_features(states[1])
+
+        novelty = {
+            "max_x" : max_point[0],
+            "max_y" : max_point[1],
+            "min_x" : min_point[0],
+            "min_y" : min_point[1],
+        }
+        novelty_list = [novelty[label] for label in novelty_labels]
+
+
+        return novelty_list
+
+    #buffer
+    if buffer:
+        buff_thick = int(buffer)
+
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+        hc[:buff_thick, :] = 100
+        hc[-buff_thick:, :] = 100
+        hc[:, :buff_thick] = 100
+        hc[:, -buff_thick:] = 100
+
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+        flatspin_kwargs["hc"] = hc
+
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
+    return pop
+
 known_fits={
     "target_state_num": target_state_num_fitness,
     "state_num": state_num_fitness,
@@ -1888,4 +1954,5 @@ known_fits={
     "novelty_life": novelty_life_fitness,
     "novelty_proliferate": novelty_proliferate_fitness,
     "novelty_many_creatures": novelty_many_creatures_fitness,
+    "grow_behaviours":grow_behaviours,
 }
