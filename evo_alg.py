@@ -89,6 +89,7 @@ def fittest_select(pop, pop_size, minimize_fit):
 
     if minimize_fit:
         fits = -1 * fits
+    pop_size = min(pop_size, len(fits))
     best_indices = np.argpartition(fits, len(fits) - pop_size)[-pop_size:]
     new_pop = [pop[i] for i in best_indices]
 
