@@ -87,17 +87,28 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
 
     pop_fitness_components = [indv.fitness_components for indv in outer_pop]
     new_pop_fitness_components = [indv.fitness_components for indv in outer_pop if indv.gen >= gen]
+    groups = {}
+    chosen_ones = []
+    chosen_fitness_components = []
+    for indv in outer_pop:
+        key = tuple(indv.fitness_components)
+        if key not in groups:
+            groups[key] = []
+            chosen_ones.append(indv)
+            chosen_fitness_components.append(indv.fitness_components)
+        groups[key].append(indv)
+
 
     if auto_normalise and os.path.exists(scale_file):
         with open(scale_file, "rb") as f:
             scale_factors = pkl.load(f)
     else:
-        scale_factors = np.ones(len(pop_fitness_components[0]))
+        scale_factors = np.ones(len(chosen_fitness_components[0]))
 
     # Load unscaled data if novelty file exists
     if not os.path.exists(novelty_file):
         # If no novelty file make data and give all fitness 0
-        unscaled_data = np.array(new_pop_fitness_components)
+        unscaled_data = np.array(chosen_fitness_components)
         kdFitness = [0] * len(outer_pop)
 
     else:
@@ -107,11 +118,22 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
         data = unscaled_data * scale_factors
         kdTree = cKDTree(data)
 
-        kdFitness = kdTree.query(pop_fitness_components * scale_factors, k=kNeigbours)[0].mean(axis=1)
-        unscaled_data = np.vstack((unscaled_data, new_pop_fitness_components))
+        kdFitness = kdTree.query(chosen_fitness_components * scale_factors, k=kNeigbours)[0].mean(axis=1)
+        # check stack has no duplicate rows
+        archive_set = {tuple(row) for row in unscaled_data}
+        unique_new = [fc for fc in chosen_fitness_components
+                    if tuple(fc) not in archive_set]
 
-    for indv, fit in zip(outer_pop, kdFitness):
+        if unique_new:
+            unscaled_data = np.vstack((unscaled_data, unique_new))
+
+    for indv, fit in zip(chosen_ones, kdFitness):
         indv.fitness = fit
+
+    for indv in outer_pop:
+        if indv in chosen_ones:
+            continue
+        indv.fitness = 0
 
     if auto_normalise:
         scale_factors = unscaled_data.max(axis=0) - unscaled_data.min(axis=0)
@@ -122,8 +144,8 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
     with open(novelty_file, "wb") as f:
         pkl.dump(unscaled_data, f)
 
-    if plot and len(new_pop_fitness_components) > 0:
-        plot_novelty(kdTree, basepath, gen, new_pop_fitness_components, plot_bounds)
+    # if plot and len(new_pop_fitness_components) > 0:
+    #     plot_novelty(kdTree, basepath, gen, new_pop_fitness_components, plot_bounds)
 
 
 def plot_novelty(kdTree, basepath, gen, new_pop_fitness_components, plot_bounds):
