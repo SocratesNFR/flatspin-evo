@@ -1884,27 +1884,34 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
 
 
 @ignore_empty_pop
-def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None, **flatspin_kwargs):
+def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None,
+                    measure_mass=False, **flatspin_kwargs):
 
-    def measure_state_features(state):
+    def measure_state_features(state, measure_mass=False):
         points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
         if len(points) == 0:
-            return None, None
+            return (None, None) if not measure_mass else (None, None, 0)
         dists = np.linalg.norm(points, axis=1)
         max_point =  points[np.argmax(dists)]
         min_point =  points[np.argmin(dists)]
+        if not measure_mass:
+            return max_point, min_point
 
-        return max_point, min_point
+        mass = len(points)
+        return max_point, min_point, mass
 
     if grid_size is None:
         grid_size = flatspin_kwargs["size"]
 
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t
+        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t, measure_mass
         t = [-1-state_step, -1]
         states = load_states(ds, t, grid_size, spin_dir)
 
         novelty_labels = ["max_x","max_y","min_x","min_y"]
+        if measure_mass:
+            novelty_labels.append("mass")
+
         return_on_fail = [np.nan] * len(novelty_labels)
 
         if np.allclose(states[0], states[1]):
@@ -1918,7 +1925,11 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
             if any_border_activity(test_states, test_border_size):
                 return return_on_fail
 
-        max_point, min_point = measure_state_features(states[1])
+        if measure_mass:
+            max_point, min_point, mass = measure_state_features(states[1], measure_mass)
+        else:
+            max_point, min_point = measure_state_features(states[1])
+
         if max_point is None or min_point is None:
             return return_on_fail
 
@@ -1928,6 +1939,9 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
             "min_x" : min_point[0],
             "min_y" : min_point[1],
         }
+        if measure_mass:
+            novelty["mass"] = mass
+
         novelty_list = [novelty[label] for label in novelty_labels]
 
 
