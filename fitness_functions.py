@@ -138,6 +138,7 @@ def evaluate_outer_novelty_search(outer_pop, basepath, *, kNeigbours=5, plot=Fal
     if auto_normalise:
         scale_factors = unscaled_data.max(axis=0) - unscaled_data.min(axis=0)
         scale_factors[scale_factors == 0] = 1  # Avoid zero-range dimensions
+        scale_factors = 1.0 / scale_factors
         with open(scale_file, "wb") as f:
             pkl.dump(scale_factors, f)
 
