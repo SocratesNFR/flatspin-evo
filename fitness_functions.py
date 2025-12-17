@@ -1886,7 +1886,7 @@ def constant_activity_3d_fitness(pop, gen, outdir, active_state=1, state_step=No
 
 @ignore_empty_pop
 def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None,
-                    measure_mass=False, **flatspin_kwargs):
+                    measure_mass=False, no_max=True, **flatspin_kwargs):
 
     def measure_state_features(state, measure_mass=False):
         points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
@@ -1905,13 +1905,15 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
         grid_size = flatspin_kwargs["size"]
 
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t, measure_mass
+        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t, measure_mass, no_max
         t = [-1-state_step, -1]
         states = load_states(ds, t, grid_size, spin_dir)
 
         novelty_labels = ["max_x","max_y","min_x","min_y"]
         if measure_mass:
             novelty_labels.append("mass")
+        if no_max:
+            novelty_labels = novelty_labels[2:]
 
         return_on_fail = [np.nan] * len(novelty_labels)
 
