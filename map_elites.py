@@ -573,6 +573,7 @@ def main(
         kids = mut_kids + crossover_kids
         for indv in kids:
             indv.gen = gen
+            indv.refresh()
 
         # Eval
         print("    Evaluate")
