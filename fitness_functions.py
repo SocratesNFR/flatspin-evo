@@ -1968,6 +1968,81 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
     pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
     return pop
 
+@ignore_empty_pop
+def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None, **flatspin_kwargs):
+
+    def measure_state_features(state):
+        points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
+        if len(points) == 0:
+            return (None, None)
+        dists = np.linalg.norm(points, axis=1)
+        # max_point =  points[np.argmax(dists)]
+        # min_point =  points[np.argmin(dists)]
+        min_point_dist = np.min(dists)
+        centre_of_mass = points.mean(axis=0)
+        norm = np.linalg.norm(centre_of_mass)
+        move_dir = (centre_of_mass / norm) if norm != 0 else centre_of_mass
+
+        return min_point_dist, move_dir
+
+    if grid_size is None:
+        grid_size = flatspin_kwargs["size"]
+
+    def fit_func(ds):
+        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t
+        t = [-1-state_step, -1]
+        states = load_states(ds, t, grid_size, spin_dir)
+
+        novelty_labels = ["move_x","move_y"]
+
+        return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
+
+        if np.allclose(states[0], states[1]):
+            return return_on_fail
+
+
+        if no_edge_t is not None:
+            test_states = load_states(ds, no_edge_t, grid_size, spin_dir)
+            test_border_size = int(buffer) + 2 if buffer else 2
+
+            if any_border_activity(test_states, test_border_size):
+                return return_on_fail
+
+
+            min_point_dist, move_dir = measure_state_features(states[1])
+
+        if min_point_dist is None:
+            return return_on_fail
+
+        novelty = {
+            "move_x" : move_dir[0],
+            "move_y" : move_dir[1],
+        }
+
+        novelty_list = [novelty[label] for label in novelty_labels]
+
+        fitness = min_point_dist
+
+        return dict(fitness=fitness, novelty_labels=novelty_labels, novelty=novelty_list)
+
+    #buffer
+    if buffer:
+        buff_thick = int(buffer)
+
+        hc = np.ones(flatspin_kwargs.get("size", (4, 4)))
+        hc[:buff_thick, :] = 100
+        hc[-buff_thick:, :] = 100
+        hc[:, :buff_thick] = 100
+        hc[:, -buff_thick:] = 100
+
+
+        hc *= flatspin_kwargs.get("hc", 0.2)
+        flatspin_kwargs["hc"] = hc
+
+
+    pop = flatspin_eval(fit_func, pop, gen, outdir, condition=None, **flatspin_kwargs)
+    return pop
+
 known_fits={
     "target_state_num": target_state_num_fitness,
     "state_num": state_num_fitness,
@@ -1999,4 +2074,5 @@ known_fits={
     "novelty_proliferate": novelty_proliferate_fitness,
     "novelty_many_creatures": novelty_many_creatures_fitness,
     "grow_behaviours":grow_behaviours,
+    "novelty_move":novelty_move_fitness,
 }
