@@ -1969,19 +1969,21 @@ def grow_behaviours(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), 
     return pop
 
 @ignore_empty_pop
-def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None, **flatspin_kwargs):
+def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0,0), state_step=1, no_edge_t=None, test_t=(-1,), dir_measure='mass', **flatspin_kwargs):
 
-    def measure_state_features(state):
+    def measure_state_features(state, dir_measure='mass'):
         points = np.vstack(np.nonzero(state)).T - 0.5 * np.array(state.shape)
         if len(points) == 0:
             return (None, None)
         dists = np.linalg.norm(points, axis=1)
         # max_point =  points[np.argmax(dists)]
-        # min_point =  points[np.argmin(dists)]
+        min_point =  points[np.argmin(dists)]
         min_point_dist = np.min(dists)
         centre_of_mass = points.mean(axis=0)
-        norm = np.linalg.norm(centre_of_mass)
-        move_dir = (centre_of_mass / norm) if norm != 0 else centre_of_mass
+
+        dir_point = min_point if dir_measure=='min' else centre_of_mass
+        norm = np.linalg.norm(dir_point)
+        move_dir = (dir_point / norm) if norm != 0 else dir_point
 
         return min_point_dist, move_dir
 
@@ -1989,16 +1991,16 @@ def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0
         grid_size = flatspin_kwargs["size"]
 
     def fit_func(ds):
-        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t
-        t = [-1-state_step, -1]
+        nonlocal grid_size, spin_dir, buffer, state_step, no_edge_t, dir_measure, test_t
+        t = list(test_t)
         states = load_states(ds, t, grid_size, spin_dir)
 
         novelty_labels = ["move_x","move_y"]
 
         return_on_fail = dict(fitness=np.nan, novelty_labels=novelty_labels, novelty=[0] * len(novelty_labels))
 
-        if np.allclose(states[0], states[1]):
-            return return_on_fail
+        # if np.allclose(states[0], states[1]):
+        #     return return_on_fail
 
 
         if no_edge_t is not None:
@@ -2008,8 +2010,9 @@ def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0
             if any_border_activity(test_states, test_border_size):
                 return return_on_fail
 
-
-            min_point_dist, move_dir = measure_state_features(states[1])
+            # # Highest i where states[i] is not all zeros; -1 if no such slice
+            highest_i = np.where(np.any(states, axis=(1, 2)))[0].max(initial=-1)
+            min_point_dist, move_dir = measure_state_features(states[highest_i], dir_measure=dir_measure)
 
         if min_point_dist is None:
             return return_on_fail
