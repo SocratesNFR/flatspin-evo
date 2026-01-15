@@ -1981,7 +1981,7 @@ def novelty_move_fitness(pop, gen, outdir, grid_size=None, buffer=2, spin_dir=(0
         min_point_dist = np.min(dists)
         centre_of_mass = points.mean(axis=0)
 
-        dir_point = min_point if dir_measure=='min' else centre_of_mass
+        dir_point = min_point if dir_measure=='min_point' else centre_of_mass
         norm = np.linalg.norm(dir_point)
         move_dir = (dir_point / norm) if norm != 0 else dir_point
 
