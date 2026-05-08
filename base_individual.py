@@ -9,7 +9,7 @@ import sys
 from collections import OrderedDict, deque
 from time import sleep
 import pandas as pd
-from itertools import count
+from itertools import chain, count
 import traceback
 
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
@@ -200,22 +200,6 @@ class Base_Individual(ABC):
 
         return default_params
 
-    @staticmethod
-    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
-        sweep_list = sweep_list or [[0, 0, {}]]
-
-        if not condition:
-            def condition(indv):
-                return len(indv.coords) > 0
-
-        id2indv = {individual.id: individual for individual in [p for p in pop if condition(p)]}
-
-        run_params = []
-        for id, indv in id2indv.items():
-            for i, j, rp in sweep_list:
-                run_params.append(dict(rp, indv_id=id, magnet_coords=indv.coords, magnet_angles=indv.angles, sub_run_name=f"_{i}_{j}"))
-
-        return run_params
 
     def fast_tessellate(self, shape=(5, 1), padding=0, centre=True, return_labels=False):
         pos = self.coords
@@ -239,83 +223,35 @@ class Base_Individual(ABC):
 
 
     @classmethod
-    def flatspin_eval(cls, fit_func, pop, gen, outdir, *, run_params=None, shared_params=None, use_default_shared_params=True,
-                    sweep_params=None, condition=None, group_by=None, max_jobs=1000,
-                    repeat=1, repeat_spec=None, preprocessing=None, dont_run=False, dependent_params={}, repeat_dict={}, **flatspin_kwargs):
-        """
-        fit_func is a function that takes a dataset and produces an iterable (or single value) of fitness components.
-        if an Individual already has fitness components the value(s) will be appended
-        (allows for multiple datasets per Individual)
-        using group_by, it is possible to use mutliple datasets to determine the fitness of an individual
-        """
+    def flatspin_eval(cls, pop, run_params, score_func, gen, outdir, *, max_jobs=1000, dont_run=False, **shared_params):
 
-        if len(pop) < 1:
+        if not pop:
             return pop
 
-        default_shared = cls.get_default_shared_params(outdir, gen)
-        if use_default_shared_params:
-            shared_params = overwrite_default_params(default_shared, shared_params)
-        elif shared_params is None:
-            shared_params = {}
-        shared_params.update(flatspin_kwargs)
-
-        sweep_list = (list(sweep(sweep_params, repeat, repeat_spec, params=shared_params)) if sweep_params else [])
-
-        if run_params is None:
-            run_params = cls.get_default_run_params(pop, sweep_list, condition=condition, outdir=outdir)
-
-        if preprocessing:
-            run_params = preprocessing(run_params)
-
-        id2indv = {individual.id: individual for individual in pop}
-        if repeat_dict:
-            extra_rps = []
-            for rp in run_params:
-                id = rp["indv_id"]
-                sub_run_name = rp["sub_run_name"]
-                repeats = repeat_dict.get(id, 0)
-                if not repeats:
-                    continue
-                indv = id2indv[id]
-                seed = indv.next_seed()
-                rp["random_seed"] = seed
-                rp["sub_run_name"] = f"{sub_run_name}_rseed{seed}"
-                for i in range(repeats-1):
-                    extra_rps.append(copy(rp))
-                    seed = indv.next_seed()
-                    extra_rps[-1]["random_seed"] = seed
-                    extra_rps[-1]["sub_run_name"] = f"{sub_run_name}_rseed{seed}"
-            run_params += extra_rps
         run_type = shared_params.get("run", "local")
-        if len(run_params) > 0:
-            evolved_params = [
-                id2indv[rp["indv_id"]].evolved_params_values for rp in run_params
-            ]
-            wait = run_type == "local" or group_by
-            cls.evo_run(run_params, shared_params, gen, evolved_params, max_jobs=max_jobs, wait=wait, dont_run=dont_run, dependent_params=dependent_params)
-            dataset = Dataset.read(shared_params["basepath"])
+        shared_params["basepath"] = os.path.join(outdir, f"gen{gen}")
+        wait = run_type == "local"
+        if run_params:
+            cls.evo_run(run_params, shared_params, gen,
+                        max_jobs=max_jobs, wait=wait,
+                        dont_run=dont_run)
 
-            process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait)
-            """
-            if run_type == "local":
-                process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by)
-            elif run_type == "dist":
-                process_dataset_dist(dataset, id2indv, fit_func, shared_params, group_by)
-            else:
-                raise ValueError("Unknown run type: {}".format(run_type))
-            """
-        # individuals that have not been evaluated (malformed)
-        evaluated = set([rp["indv_id"] for rp in run_params])
-        for indv in [i for i in pop if i.id not in evaluated]:
-            indv.fitness_components = [np.nan]
+            dataset = Dataset.read(shared_params["basepath"])
+            process_dataset_local(dataset, score_func, wait)
+
+        # mark unevaluated individuals
+        id_cols = [k for k in run_params[0] if k.startswith("indv_id_")]
+        evaluated = set(id for rp in run_params for k in id_cols for id in [rp[k]])
+        for indv in pop:
+            if indv.id not in evaluated:
+                indv.fitness_components = [np.nan]
+
         return pop
 
 
     @classmethod
-    def evo_run(cls, runs_params, shared_params, gen, evolved_params=None, wait=False, max_jobs=1000, dont_run=False, dependent_params={}):
+    def evo_run(cls, runs_params, shared_params, gen, wait=False, max_jobs=1000, dont_run=False):
         """modified from run_sweep.py main()"""
-        if not evolved_params:
-            evolved_params = []
         model_name = shared_params.pop("model", "CustomSpinIce")
         model_class = import_class(model_name, "flatspin.model")
         encoder_name = shared_params.get("encoder", "Sine")
@@ -353,19 +289,12 @@ class Base_Individual(ABC):
         for i, run_params in enumerate(runs_params):
             newparams = copy(params)
             newparams.update(run_params)
-            if evolved_params:
-                # get any flatspin params in evolved_params and update run param with them
-                run_params.update(
-                    {k: v for k, v in evolved_params[i].items() if k in newparams}
-                )
-            if dependent_params:
-                # get any dependent params in dependent_params and update run param with them
-                dp = eval_params(dependent_params, {**run_params, **evolved_params[i]})
-                run_params.update(dp)
 
-            sub_run_name = newparams.get("sub_run_name", "x")
-            # outdir = outdir_tpl.format(gen, newparams["indv_id"]) + f"{sub_run_name}.{ext}"
-            outdir = f"gen{gen}indv{newparams['indv_id']}{sub_run_name}.{ext}"
+
+            sub_run_name = newparams.get("sub_run_name", f"_i{i}")
+            id_cols = sorted([k for k in newparams if k.startswith("indv_id_")])
+            indv_str = "v".join(str(newparams[k]) for k in id_cols)
+            outdir = f"gen{gen}indv{indv_str}{sub_run_name}.{ext}"
             filenames.append(outdir)
             row = OrderedDict(run_params)
             row.update({"outdir": outdir})
@@ -422,17 +351,15 @@ def process_dataset_dist(dataset, id2indv, fit_func, shared_params, group_by):
     job_script = make_job_script(dataset, group_by)
 
 
-def process_dataset_local(dataset, id2indv, fit_func, shared_params, group_by, wait):
+def process_dataset_local(dataset, fit_func, wait):
     queue = dataset
-    if group_by:
-        _, queue = zip(*dataset.groupby(group_by))
+
     queue = list(queue)
     while queue:
         ds = queue.pop(0)
         with np.errstate():
-            indv_id = get_ds_indv_id(ds)
             try:
-                calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv)
+                fit_func(ds)
             except Exception as e:
                 handle_exception(e, queue, ds, wait)#group_by)
 
@@ -445,35 +372,7 @@ def get_ds_indv_id(ds):
 
 
 
-def calculate_and_assign_fitness(indv_id, fit_func, ds, id2indv):
-    fit_components = fit_func(ds)
-    indv = id2indv[indv_id]
 
-    if isinstance(fit_components, dict): # if a dict assign the values, if values already exist appends values (if not a list already make it a list)
-        for k, v in fit_components.items():
-            if isinstance(v, list):
-                v = tuple(v)
-            if not hasattr(indv, k) or getattr(indv, k) is None:
-                setattr(indv, k, v)
-            else:
-                current_v = getattr(indv, k)
-                if isinstance(current_v, list):
-                    current_v.append(v)
-                else:
-                    setattr(indv, k, [current_v, v])
-        return
-
-
-    try:
-        fit_components = list(fit_components)
-    except (TypeError):
-        fit_components = [fit_components]
-    
-
-    if indv.fitness_components is not None:
-        indv.fitness_components += fit_components
-    else:
-        indv.fitness_components = fit_components
 
 
 def handle_exception(e, queue, ds, wait=True):
@@ -508,41 +407,7 @@ def make_parser():
     parser.add_argument("-l", "--log", metavar="FILE", default="evo.log", help=r"name of the log file to create")
     parser.add_argument("-p", "--parameter", action=StoreKeyValue, default={},
                         help="param passed to flatspin and inner evaluate fitness function",)
-    parser.add_argument(
-        "-s",
-        "--sweep_param",
-        action=StoreKeyValue,
-        default=OrderedDict(),
-        help="flatspin param to be swept on each Individual evaluation",
-    )
-    parser.add_argument(
-        "-n",
-        "--repeat",
-        type=int,
-        default=1,
-        metavar="N",
-        help="repeat each flatspin run N times (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-ns",
-        "--repeat-spec",
-        action=StoreKeyValue,
-        metavar="key=SPEC",
-        help="repeat each flatspin run according to key=SPEC",
-    )
-    parser.add_argument(
-        "-e",
-        "--evolved_param",
-        action=StoreKeyValue,
-        default={},
-        help="""param passed to flatspin and inner evaluate that is under evolutionary control, format: -e param_name=[low, high] or -e param_name=[low, high, shape*]
-                                int only values not supported""",
-    )
-    parser.add_argument(
-        "--evo-rotate",
-        action="store_true",
-        help='short hand for "-e initial_rotation=[0,2*np.pi]"',
-    )
+
     parser.add_argument(
         "-i",
         "--individual_param",
@@ -564,9 +429,7 @@ def make_parser():
         default={},
         help="use for flatspin param that is dependent on other params (e.g. -e H=[0.5,1] -d 'H0=-H*2')"
     )
-    parser.add_argument(
-        "--group-by", nargs="*", help="group by parameter(s) for fitness evaluation"
-    )
+
     parser.add_argument(
         "--calculate-fit-only",
         action="store_true",

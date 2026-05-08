@@ -14,7 +14,7 @@ from os import path
 
 class Individual(one_d_geno.Individual):
     current_gen = 0
-    def __init__(self, *, index_map=None, spin_count=1, fixed_val=None, gen2size=None, stratergy_genome=None, stratergy_genome_range=None, **kwargs):
+    def __init__(self, *, index_map=None, spin_count=1, fixed_val=None, gen2size=None, **kwargs):
         assert index_map, "index_map is required"
         assert spin_count >= len(
             index_map), f"spin_count {spin_count} must be >= len(index_map) {len(index_map)}"
@@ -37,17 +37,11 @@ class Individual(one_d_geno.Individual):
 
         super().__init__(min_len=min_len, max_len=max_len, **kwargs)
 
-        self.stratergy_genome_range = stratergy_genome_range
-        if stratergy_genome is None and stratergy_genome_range is not None:
-            stratergy_genome = np.random.rand(len(self.genome_params) + 1)
-            (stratergy_genome_range[1] - stratergy_genome_range[0]) * stratergy_genome + stratergy_genome_range[0]
-
-        self.stratergy_genome = stratergy_genome
 
         self.fix()
 
 
-    def genome2run_params(self, outdir):
+    def genome2run_params(self, outdir, encode_and_save=True):
         rp = super().genome2run_params()
         init_state = np.zeros(self.spin_count) - 1
 
@@ -55,19 +49,25 @@ class Individual(one_d_geno.Individual):
         bin_genome = np.greater(state_genome, 0.5).astype(int)
         init_state[self.index_map] += 2 * bin_genome
 
-        zip_code = "".join(bin_genome.astype(str))
-        zip_code = binstring2b64(zip_code)
+        if encode_and_save:
+            rp["init"] = self.encode_and_save_init(init_state, outdir)
+        else:
+                rp["init"] = init_state
 
+        return rp
+
+    @classmethod
+    def encode_and_save_init(cls, init_state, outdir):
+        bin_state = (init_state > 0).astype(int)
+        zip_code = binstring2b64("".join(bin_state.astype(str)))
         dir = path.join(outdir, "init")
         fn = path.join(dir, f"init[{zip_code}].csv")
-        rp["init"] = fn
-
         if not os.path.exists(fn):
             if not os.path.exists(dir):
                 os.makedirs(dir)
             save_table(init_state, fn)
+        return fn
 
-        return rp
 
     def fix(self):
         if self.fixed_val is None or self.gen2size is None:
@@ -97,19 +97,18 @@ class Individual(one_d_geno.Individual):
 
     def mutate(self, strength=1):
 
-        if self.stratergy_genome is not None:
-            strength *= ((10**self.stratergy_genome) -1)
-            strength = np.pad(strength, (0, len(self.genome) - len(strength)), mode="edge") # repeat final element unitl same size as genome
-
         [child] = super().mutate(strength=strength)
         child.fix()
-
-        if self.stratergy_genome is not None:
-            child.stratergy_genome = Individual.gauss_mutate(child.stratergy_genome, 0.01, 0, 1)
         return [child]
 
     def crossover(self, other):
-        [child] = super().crossover(other)
+
+        gen1_params, gen1_state = self.genome[:len(self.genome_params)], self.genome[len(self.genome_params):]
+        gen2_params, gen2_state = other.genome[:len(other.genome_params)], other.genome[len(other.genome_params):]
+
+        genome = np.concatenate((self.line_crossover(gen1_params, gen2_params), self.point_crossover(gen1_state, gen2_state)))
+        child = self.copy(parent_ids=[self.id, other.id])
+        child.genome = genome
         child.fix()
         return [child]
 

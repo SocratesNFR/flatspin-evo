@@ -6,7 +6,7 @@ import numpy as np
 import os
 from collections import OrderedDict
 
-import evo_alg as ea
+import adversEa as ea
 from base_individual import Base_Individual
 import fitness_functions
 import copy
@@ -64,20 +64,6 @@ class Individual(Base_Individual):
 
         return default_params
 
-    @staticmethod
-    def get_default_run_params(pop, sweep_list=None, *, condition=None, outdir=None):
-        sweep_list = sweep_list or [[0, 0, {}]]
-
-        id2indv = {individual.id: individual for individual in [
-            p for p in pop if condition is None or condition(p)]}
-
-        run_params = []
-
-        for id, indv in id2indv.items():
-            for i, j, rp in sweep_list:
-                run_params.append(
-                    dict(rp, indv_id=id, sub_run_name=f"_{i}_{j}", **indv.genome2run_params()))
-        return run_params
 
     @classmethod
     def set_id_start(cls, start):
@@ -88,7 +74,7 @@ class Individual(Base_Individual):
         override this with method to convert genome to run_params
         return a dictionary of run_params
         """
-        rp = {}
+        rp = {"indv_id": self.id}
         for i, (gp, val) in enumerate(self.genome_params.items()):
             rp[gp] = val[0] + (val[1] - val[0]) * self.genome[i]
 
@@ -106,7 +92,7 @@ class Individual(Base_Individual):
 
     def mutate(self, strength=1):
         child = self.copy(parent_ids=[self.id])
-        mutations = [Individual.point_mutate, Individual.full_mutate]
+        # mutations = [Individual.point_mutate, Individual.full_mutate]
         mutations = [Individual.full_mutate]
 
         weights = [1] * len(mutations)
@@ -134,24 +120,34 @@ class Individual(Base_Individual):
         child.genome = np.clip(child.genome, floor, ceiling)
 
     def crossover(self, other):
-        child = self.line_crossover(other)
+        child = self.copy(parent_ids=[self.id, other.id])
+        child.genome = self.line_crossover(self.genome, other.genome)
         return [child]
 
-    def line_crossover(self, other):
-        assert len(self.genome) == len(
-            other.genome), "different genome lengths not implemented"
+    @classmethod
+    def point_crossover(cls, genome1, genome2):
+        assert len(genome1) == len(
+            genome2), "different genome lengths not implemented"
 
-        child = self.copy(parent_ids=[self.id, other.id])
+        if np.random.rand() < 0.5:
+            genome1, genome2 = genome2, genome1 # shuffle which is first
+
+        indx = np.random.randint(0, len(genome1))
+        child_genome = np.concatenate((genome1[:indx], genome2[indx:]))
+        return child_genome
+
+    @classmethod
+    def line_crossover(cls, genome1, genome2):
+        assert len(genome1) == len(
+            genome2), "different genome lengths not implemented"
 
         dist = np.random.rand()
-        child.genome = dist * other.genome + (1 - dist) * self.genome
-        return child
-
+        return dist * genome2 + (1 - dist) * genome1
 
 
 
 def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inner="flips", outer="default",
-                minimize_fitness=True, calculate_fit_only=False, map_elite=False, robust_map_elite=False, **kwargs):
+                minimize_fitness=True, **kwargs):
     known_fits = {
 
     }  # genotype-specific fitnesses
@@ -161,17 +157,7 @@ def inner_main(outdir=r"results\tileTest", *,  individual_class=Individual, inne
     outer = known_fits.get(
         outer, fitness_functions.known_fits.get(outer, outer))
 
-    if map_elite:
-        import map_elites
-        return map_elites.main(outdir, individual_class, inner, minimize_fitness, **kwargs)
 
-    if robust_map_elite:
-        import robust_map_elites
-        return robust_map_elites.main(outdir, individual_class, inner, minimize_fitness, **kwargs)
-
-    if calculate_fit_only:
-        return ea.only_run_fitness_func(outdir, individual_class, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
-    
     return ea.main(outdir, individual_class, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
 
 
@@ -182,14 +168,14 @@ def main(individual_class=Individual):
     parser = make_parser()
     parser.add_argument("-g", "--genome_param", action=StoreKeyValue, default={},
                         help="""a flatspin parameter to be controlled by a gene in the genome, format: -g param_name=[low, high] """)
-    parser.add_argument("--map-elite", action="store_true",
-                        help="use map-elites algorithm", default=False)
-    parser.add_argument("--robust-map-elite", action="store_true",
-                        help="use roubust map-elites algorithm", default=False)
+
+    parser.add_argument("-pi", "--pop_specific_params", action=StoreKeyValue, default={},
+                        help=""" inidividual parameters (like -i) but per population, format: -pi keyword=[param1, param2, ... paramN] where N is the number of populations.""")
+
 
     args = parser.parse_args()
 
-    evolved_params = eval_params(args.evolved_param)
+    pop_specific_params = eval_params(args.pop_specific_params)
     genome_params = eval_params(args.genome_param)
 
     args.individual_param["genome_params"] = OrderedDict(genome_params)
@@ -203,17 +189,10 @@ def main(individual_class=Individual):
         outdir=args.output,
         individual_class=individual_class,
         **eval_params(args.parameter),
-        evolved_params=evolved_params,
         individual_params=eval_params(args.individual_param),
         outer_eval_params=eval_params(args.outer_eval_param),
-        sweep_params=args.sweep_param,
         dependent_params=args.dependent_param,
-        repeat=args.repeat,
-        repeat_spec=args.repeat_spec,
-        group_by=args.group_by,
-        calculate_fit_only=args.calculate_fit_only,
-        map_elite=args.map_elite,
-        robust_map_elite=args.robust_map_elite
+        pop_specific_params=pop_specific_params,
     )
 
 
