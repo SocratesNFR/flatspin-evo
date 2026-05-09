@@ -225,6 +225,7 @@ def main(
     n_pops=2,
     generation_num=500,
     mut_prob=0.05,
+    cx_ratio=2,
     mut_strength=1,
     outer_eval_params={},
     individual_params={},
@@ -296,7 +297,7 @@ def main(
 
         # Crossover!
         print("    Crossover")
-        kids = [crossover(pop, pop_size, minimize_fitness=minimize_fitness, use_rank=True) for pop in pops]
+        kids = [crossover(pop, pop_size * cx_ratio, minimize_fitness=minimize_fitness, use_rank=True) for pop in pops]
 
         # Mutate!
         print("    Mutate")
