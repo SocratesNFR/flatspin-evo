@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.distance import hamming
 import pandas as pd
 from itertools import chain
 import heapq
@@ -177,6 +178,32 @@ def crossover(pop, n_kids, minimize_fitness=True, use_rank=False):
         kids.append(pop[a_idx].crossover(pop[b_idx])[0])
     return kids
 
+def niche_select(pop, n, minimize_fitness=True, threshold=0.05):
+    # group into niches by similarity
+    niches = []
+    for indv in sorted(pop, key=lambda i: i.fitness, reverse=not minimize_fitness):
+        for niche in niches:
+            if hamming(indv.novelty > 0, niche[0].novelty >  0) < threshold:
+                niche.append(indv)
+                break
+        else:
+            niches.append([indv])  # new niche
+
+    # niches are already internally sorted by fitness since we iterate best-first
+    # sort niches by their best member
+    niches.sort(key=lambda n: n[0].fitness, reverse=not minimize_fitness)
+
+    # round-robin pick best from each niche
+    selected = []
+    while len(selected) < n:
+        for niche in niches:
+            if niche:
+                selected.append(niche.pop(0))
+            if len(selected) == n:
+                break
+
+    return selected
+
 
 def print_time(tr):
     print(
@@ -236,6 +263,7 @@ def main(
     starting_gen=1,
     dataset_params=None,
     random_seed=0,
+    niche_threshold=0.05,
     **kwargs,
 ):
 
@@ -329,7 +357,7 @@ def main(
         evaluate_outer(flat_n_concat(pops), basepath=outdir, gen=gen, **outer_eval_params)
 
         # Select
-        pops[:] = [get_best(pop, pop_size, minimize_fitness, return_nan=True) for pop in pops]
+        pops[:] = [niche_select(pop, pop_size, minimize_fitness, threshold=niche_threshold) for pop in pops]
 
 
         best = update_superdataset(
