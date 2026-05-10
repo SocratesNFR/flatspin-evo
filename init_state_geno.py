@@ -56,6 +56,12 @@ class Individual(one_d_geno.Individual):
 
         return rp
 
+    @property
+    def novelty(self):
+        state_genome = self.genome[len(self.genome_params): ] # the first genes are used for the genome params
+        bin_genome = np.greater(state_genome, 0.5)
+        return bin_genome
+
     @classmethod
     def encode_and_save_init(cls, init_state, outdir):
         bin_state = (init_state > 0).astype(int)
