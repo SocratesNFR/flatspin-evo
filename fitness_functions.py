@@ -10,6 +10,8 @@ from tqdm.auto import tqdm
 import pickle as pkl
 import warnings
 import math
+import shutil
+import os
 
 from flatspin import plotting
 from flatspin.data import Dataset, read_table, load_output, is_archive_format, match_column, save_table
@@ -17,7 +19,6 @@ from flatspin.grid import Grid
 from flatspin.utils import import_class, pop_params
 from flatspin.cmdline import eval_params
 
-import os
 
 
 
@@ -326,6 +327,10 @@ def load_states(ds, t=slice(None), spin_dir=(1,1), grid_size=None):
 
 def jousting_fitness(pops, gen, outdir, dependent_params={}, n_fights=3, **kwargs):
     individual_class = type(pops[0][0])
+
+    init_dir = os.path.join(outdir, "init")
+    if os.path.exists(init_dir): # clean up old inits, easy to reconstruct if needed
+        shutil.rmtree(init_dir)
     run_param_groups = [
        [indv.genome2run_params(outdir, encode_and_save=False) for indv in pop]
     for pop in pops
