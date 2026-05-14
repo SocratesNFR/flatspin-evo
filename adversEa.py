@@ -239,7 +239,21 @@ def flat_n_concat(*lists):
     """takes one or more 'list of lists' and flattens and concatenates them into a single shallow list"""
     return chain.from_iterable(chain(*lists))
 
-
+def migrate_genome(indv, target_pop_id, gen, pop_specific_params={}):
+    migrant = indv.copy()
+    migrant.pop_id = target_pop_id
+    migrant.gen = gen
+    
+    for k, v in pop_specific_params.items():
+        setattr(migrant, k, v[target_pop_id])
+    
+    genome_params_len = len(migrant.genome_params)
+    state = migrant.genome[genome_params_len:]
+    state_2d = state.reshape(10, 5)
+    state_2d = np.rot90(state_2d, 2)
+    state_2d = np.roll(state_2d, 1, axis=0)
+    migrant.genome[genome_params_len:] = state_2d.flatten()
+    return migrant
 
 def main(
     outdir,
@@ -264,6 +278,7 @@ def main(
     dataset_params=None,
     random_seed=0,
     niche_threshold=0.05,
+    migration_prob=0.0,
     **kwargs,
 ):
 
@@ -340,11 +355,23 @@ def main(
         print("    Evaluate")
 
 
-        for i in range(len(pops)):
-            elites = get_best(pops[i], int(pop_size * elitism), minimize_fitness, return_nan=False)
+        all_elites = [
+            get_best(pops[i], int(pop_size * elitism), minimize_fitness, return_nan=False)
+            for i in range(len(pops))
+        ]
+
+        for i, elites in enumerate(all_elites):
             for e in elites:
                 e.refresh()
-            pops[i] = kids[i] + elites # mix kids with elite from parents, elite can be less than 1 if not enough valid individuals
+            pops[i] = kids[i] + elites
+
+        for i in range(n_pops):
+            if n_pops == 1 or np.random.rand() > migration_prob:
+                continue
+            donor_pop = np.random.choice([j for j in range(n_pops) if j != i])
+            expat = np.random.choice(all_elites[donor_pop])
+            pops[i].append(migrate_genome(expat, i, gen, pop_specific_params))
+
 
         evaluate_inner(
             pops,
@@ -366,8 +393,10 @@ def main(
         dataset.save()
 
 
-        if best is not None:
-            print(f"best fitness: {best.fitness}")
+        for i, subpop in enumerate(pops):
+            pop_best = get_best(subpop, minimize_fitness=minimize_fitness)
+            if pop_best is not None:
+                print(f"  pop {i} best fitness: {pop_best.fitness}")
 
         born_this_gen = sum(indv.gen == gen for indv in flat_n_concat(pops))
         n_elites = int(pop_size * elitism) * n_pops
