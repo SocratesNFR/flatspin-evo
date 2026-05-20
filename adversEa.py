@@ -63,6 +63,8 @@ def update_superdataset(dataset, outdir, pops, gen, minimize_fitness=True, datas
         return
     dataset_params = dataset_params or []
     best = get_best(pop, minimize_fitness=minimize_fitness)
+    pop_bests = {i: get_best([indv for indv in pop if indv.pop_id == i], minimize_fitness=minimize_fitness) 
+             for i in range(len(pops))}
 
     ds = Dataset.read(os.path.join(outdir, f"gen{gen}"))
     ind = ds.index.copy()
@@ -85,7 +87,7 @@ def update_superdataset(dataset, outdir, pops, gen, minimize_fitness=True, datas
             born=indv.gen,
             pop_id=indv.pop_id,
             fitness=indv.fitness,
-            best=int(indv == best),
+            best=int(indv == pop_bests[indv.pop_id]),
         )
         column_names = [f"fitness_component{i}" for i in range(len(indv.fitness_components))]
         rows = rows.assign(**dict(zip(column_names, indv.fitness_components)))

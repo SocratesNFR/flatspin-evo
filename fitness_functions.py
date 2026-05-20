@@ -263,7 +263,7 @@ def shuffled_copy(lst):
     np.random.shuffle(lst_copy)
     return lst_copy
 
-def make_matches(run_param_groups, dependent_params={}, fights_per_indv=1, merge_stratergy={}):
+def make_matches_old(run_param_groups, dependent_params={}, fights_per_indv=1, merge_stratergy={}):
     """given a list of run_param_groups, make matches between them, returning one run_param for each match"""
     matches = []
     for _ in range(fights_per_indv):
@@ -275,6 +275,22 @@ def make_matches(run_param_groups, dependent_params={}, fights_per_indv=1, merge
 
     merged_matches = [merge_run_params(*match, dependent_params=dependent_params, **merge_stratergy) for match in matches]
     return merged_matches
+
+def make_matches(run_param_groups, dependent_params={}, fights_per_indv=1, merge_stratergy={}):
+    """given a list of run_param_groups, make matches between them using rotation to ensure no repeat matchups
+    good for 2 pops, but not so good for more than 2 as all appart from group[0] will be repeat :(
+    """
+    groups = [shuffled_copy(g) for g in run_param_groups]
+    n = len(groups[0])
+    assert fights_per_indv <= n, "fights_per_indv must be <= population size to guarantee no repeat matchups"
+
+    matches = []
+    for k in range(fights_per_indv):
+        for i in range(n):
+            match = [groups[0][i]] + [g[(i + k) % n] for g in groups[1:]]
+            matches.append(match)
+
+    return [merge_run_params(*match, dependent_params=dependent_params, **merge_stratergy) for match in matches]
 
 def merge_run_params(*rps, dependent_params={}, **merge_stratergy):
     """given run params for each participant in a match, merge them into one run param dict for the match, using the merge_stratergy to resolve conflicts,
