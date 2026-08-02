@@ -169,7 +169,7 @@ def main(
         if best:
             print(f"Best fitness: {best.fitness}")
 
-        save_snapshot(outdir, optimizer)
+        # save_snapshot(outdir, optimizer)
 
         gen_times.append((datetime.now() - time).total_seconds())
     return best
