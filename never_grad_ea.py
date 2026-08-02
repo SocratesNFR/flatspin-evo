@@ -69,7 +69,7 @@ def print_time(tr):
 
 def init_evolved_params(param_template, evolved_params):
     for p_name, (p_lower, p_upper) in evolved_params.items():
-        param_template[p_name]= ng.p.Scalar(lower=p_lower, upper=p_upper)
+        param_template[p_name]= ng.p.Scalar(lower=p_lower, upper=p_upper).set_mutation(sigma=(p_upper - p_lower) / 6) # gives +/- 3 sigma range as ng requests
 
 def main(
     outdir,
