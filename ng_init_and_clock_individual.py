@@ -25,8 +25,8 @@ class NG_Init_And_Clock_Individual(NG_Individual):
             ]),
 
             field_order=ng.p.Array(shape=(8,))
-                .set_bounds(0, 1)
-                .set_mutation(sigma=(1 - 0) / 6),
+                .set_mutation(sigma=(1 - 0) / 6)
+                .set_bounds(0, 1),
         )
 
 

@@ -7,6 +7,7 @@ import sys
 from flatspin.data import Dataset
 import pickle as pkl
 import nevergrad as ng
+from copy import deepcopy
 
 
 def update_superdataset(dataset, outdir, pop, gen, minimize_fitness=True, dataset_params=None):
@@ -69,7 +70,7 @@ def print_time(tr):
 
 def init_evolved_params(param_template, evolved_params):
     for p_name, (p_lower, p_upper) in evolved_params.items():
-        param_template[p_name]= ng.p.Scalar(lower=p_lower, upper=p_upper).set_mutation(sigma=(p_upper - p_lower) / 6) # gives +/- 3 sigma range as ng requests
+        param_template[p_name]= ng.p.Scalar().set_mutation(sigma=(p_upper - p_lower) / 6).set_bounds(p_lower, p_upper) # gives +/- 3 sigma range as ng requests
 
 def main(
     outdir,
@@ -112,7 +113,7 @@ def main(
     init_evolved_params(param_template, evolved_params)
 
     optimizer = ng.optimizers.NGOpt(
-        parametrization=param_template, budget=pop_size * generation_num)
+        parametrization=param_template, budget=pop_size * generation_num, num_workers=1)
 
     gen_times = []
     best = None
@@ -126,11 +127,11 @@ def main(
 
         batch = [ optimizer.ask() for _ in range(pop_size) ]
 
-        pop = [individual_class(params=params.value, **individual_params) for params in batch]
+        pop = [individual_class(params=deepcopy(params.value), **individual_params) for params in batch]
 
         if gen == generation_num - 1: # last generation, ask for the best recommendation too
             best = optimizer.provide_recommendation()
-            pop.append(individual_class(params=best.value, **individual_params))
+            pop.append(individual_class(params=deepcopy(best.value), **individual_params))
 
 
         print("    Evaluate")
