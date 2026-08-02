@@ -6,6 +6,7 @@ from copy import copy
 from collections import OrderedDict
 from PIL import Image
 from joblib import Parallel, delayed
+import skimage
 from tqdm.auto import tqdm
 import pickle as pkl
 import warnings
@@ -379,9 +380,39 @@ def jousting_fitness(pops, gen, outdir, dependent_params={}, n_fights=3, **kwarg
 
     individual_class.flatspin_eval(list(id2indv.values()), run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
 
+def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, **kwargs):
+    individual_class = type(pop[0])
+
+    init_dir = os.path.join(outdir, "init")
+    if os.path.exists(init_dir): # clean up old inits, easy to reconstruct if needed
+        shutil.rmtree(init_dir)
+
+    run_params=[indv.genome2run_params(outdir) for indv in pop]
+    id2indv = {individual.id: individual for individual in pop}
+
+    def fit_func(dsi):
+        # this function will return nothing, but will append to the fitness components of any relevant individuals in the population based on the results of the match
+        indv = id2indv[dsi.index["indv_id"].values[0]]
+
+        size = np.array(dsi.params["size"]) +(1,0) # this was for size=(35,35) diamond, not sure if it's general
+        grid_size = (size).tolist()
+        states = load_states(dsi, [t_start, t_end], grid_size=grid_size, spin_dir=(1,1))
+
+        _, n_comp_start = skimage.measure.label(states[0], background=0, connectivity=2, return_num=True)
+
+        _, n_comp_end = skimage.measure.label(states[1], background=0, connectivity=2, return_num=True)
+        score = n_comp_end - max(n_comp_start, 1)
+
+        indv.fitness_components = (indv.fitness_components or []) + [score]
+
+
+
+    individual_class.flatspin_eval(pop, run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
+
 known_fits={
     "default": evaluate_outer,
     "find_all": evaluate_outer_find_all,
     "novelty": evaluate_outer_novelty_search,
     "jousting": jousting_fitness,
+    "proliferate": proliferate_fitness,
 }

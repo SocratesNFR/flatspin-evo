@@ -44,13 +44,11 @@ class Individual(one_d_geno.Individual):
     def genome2run_params(self, outdir, encode_and_save=True):
         rp = super().genome2run_params()
         init_state = np.zeros(self.spin_count) - 1
-
-        state_genome = self.genome[len(self.genome_params): ] # the first genes are used for the genome params
-        bin_genome = np.greater(state_genome, 0.5).astype(int)
-        init_state[self.index_map] += 2 * bin_genome
+        bin_genome = self.binary_genome
+        init_state[self.index_map] += 2 * bin_genome # add 2 because init_state is all -1
 
         if encode_and_save:
-            rp["init"] = self.encode_and_save_init(init_state, outdir)
+            rp["init"] = self.encode_and_save_init(init_state, bin_genome, outdir)
         else:
                 rp["init"] = init_state
 
@@ -58,13 +56,16 @@ class Individual(one_d_geno.Individual):
 
     @property
     def novelty(self):
+        return self.binary_genome
+
+    @property
+    def binary_genome(self):
         state_genome = self.genome[len(self.genome_params): ] # the first genes are used for the genome params
         bin_genome = np.greater(state_genome, 0.5)
         return bin_genome
 
     @classmethod
-    def encode_and_save_init(cls, init_state, outdir):
-        bin_state = (init_state > 0).astype(int)
+    def encode_and_save_init(cls, init_state, bin_state, outdir):
         zip_code = binstring2b64("".join(bin_state.astype(str)))
         dir = path.join(outdir, "init")
         fn = path.join(dir, f"init[{zip_code}].csv")

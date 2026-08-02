@@ -122,14 +122,14 @@ class Base_Individual(ABC):
         else:
             return min + (max - min) * np.random.rand(*shape)
 
-    @abstractmethod
+
     def mutate(self, strength):
         """
         :param strength: the strength of the mutation
         :return: a list of 1 or more new individuals (return empty list if mutation fails or not implemented)
         """
 
-    @abstractmethod
+
     def crossover(self, other):
         """
         :param other: the other individual to crossover with
@@ -223,7 +223,7 @@ class Base_Individual(ABC):
 
 
     @classmethod
-    def flatspin_eval(cls, pop, run_params, score_func, gen, outdir, *, max_jobs=1000, dont_run=False, **shared_params):
+    def flatspin_eval(cls, pop, run_params, score_func, gen, outdir, *, max_jobs=1000, dont_run=False, dependent_params={},**shared_params):
 
         if not pop:
             return pop
@@ -232,6 +232,12 @@ class Base_Individual(ABC):
         shared_params["basepath"] = os.path.join(outdir, f"gen{gen}")
         wait = run_type == "local"
         if run_params:
+
+            if dependent_params:
+                for rp in run_params:
+                        dp = eval_params(dependent_params, rp)
+                        rp.update(dp)
+
             cls.evo_run(run_params, shared_params, gen,
                         max_jobs=max_jobs, wait=wait,
                         dont_run=dont_run)
@@ -240,7 +246,7 @@ class Base_Individual(ABC):
             process_dataset_local(dataset, score_func, wait)
 
         # mark unevaluated individuals
-        id_cols = [k for k in run_params[0] if k.startswith("indv_id_")]
+        id_cols = [k for k in run_params[0] if k.startswith("indv_id")]
         evaluated = set(id for rp in run_params for k in id_cols for id in [rp[k]])
         for indv in pop:
             if indv.id not in evaluated:
