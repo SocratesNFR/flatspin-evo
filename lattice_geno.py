@@ -33,10 +33,10 @@ class Individual(Base_Individual):
 
         self.id = next(self._id_counter) if id is None else id
 
-        self.basis0_len = basis0_len if basis0_len is not None else random_range(Individual.basis_min, Individual.basis_max)
-        self.basis0_angle = basis0_angle if basis0_angle is not None else random_range(0, np.pi)
-        self.basis1_len = basis1_len if basis1_len is not None else random_range(Individual.basis_min, Individual.basis_max)
-        self.basis1_angle = basis1_angle if basis1_angle is not None else random_range(Individual.min_angle_offset, np.pi - Individual.min_angle_offset)
+        self.basis0_len = basis0_len if basis0_len is not None else Individual.random_range(Individual.basis_min, Individual.basis_max)
+        self.basis0_angle = basis0_angle if basis0_angle is not None else Individual.random_range(0, np.pi)
+        self.basis1_len = basis1_len if basis1_len is not None else Individual.random_range(Individual.basis_min, Individual.basis_max)
+        self.basis1_angle = basis1_angle if basis1_angle is not None else Individual.random_range(Individual.min_angle_offset, np.pi - Individual.min_angle_offset)
 
         if angle_tile_map is not None:
             angle_tile_map = np.array(angle_tile_map) if not isinstance(angle_tile_map, np.ndarray) else angle_tile_map
@@ -52,7 +52,7 @@ class Individual(Base_Individual):
             np.random.randint(0, self.num_angles or np.prod(self.angle_tile_shape), size=self.angle_tile_shape)
         )
 
-        self.angle_table = angle_table if angle_table is not None else random_range(0, 2 * np.pi, shape=(self.num_angles or np.prod(self.angle_tile_shape),))
+        self.angle_table = angle_table if angle_table is not None else Individual.random_range(0, 2 * np.pi, shape=(self.num_angles or np.prod(self.angle_tile_shape),))
 
         if hole_tile is not None:
             hole_tile = np.array(hole_tile) if not isinstance(hole_tile, np.ndarray) else hole_tile
@@ -480,11 +480,6 @@ def main(outdir=r"results\tileTest", inner="flips", outer="default", minimize_fi
         return ea.main(outdir, Individual, inner, outer, minimize_fitness=minimize_fitness, **kwargs)
 
 
-def random_range(min, max, shape=None):
-    if shape is None:
-        return min + (max - min) * np.random.rand()
-    else:
-        return min + (max - min) * np.random.rand(*shape)
 
 
 if __name__ == "__main__":

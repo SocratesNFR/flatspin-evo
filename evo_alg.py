@@ -89,7 +89,8 @@ def fittest_select(pop, pop_size, minimize_fit):
 
     if minimize_fit:
         fits = -1 * fits
-    best_indices = np.argpartition(fits, -pop_size)[-pop_size:]
+    pop_size = min(pop_size, len(fits))
+    best_indices = np.argpartition(fits, len(fits) - pop_size)[-pop_size:]
     new_pop = [pop[i] for i in best_indices]
 
     return new_pop
@@ -517,6 +518,8 @@ def main(outdir, individual_class, evaluate_inner, evaluate_outer, minimize_fitn
             list(map(individual_class.clear_fitness, pop))  # clear fitness and fitness componenets
             evaluate_inner(pop, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
         else:
+            for kid in mut_kids + crossover_kids:
+                kid.refresh()
             evaluate_inner(mut_kids + crossover_kids, gen, outdir, sweep_params=sweep_params, group_by=group_by, dependent_params=dependent_params, **kwargs)
             pop.extend(mut_kids + crossover_kids)
         evaluate_outer(pop, basepath=outdir, gen=gen, **outer_eval_params)
