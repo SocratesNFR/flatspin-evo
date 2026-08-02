@@ -380,7 +380,7 @@ def jousting_fitness(pops, gen, outdir, dependent_params={}, n_fights=3, **kwarg
 
     individual_class.flatspin_eval(list(id2indv.values()), run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
 
-def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, **kwargs):
+def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, **kwargs):
     individual_class = type(pop[0])
 
     init_dir = os.path.join(outdir, "init")
@@ -394,9 +394,15 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, **kwargs):
         # this function will return nothing, but will append to the fitness components of any relevant individuals in the population based on the results of the match
         indv = id2indv[dsi.index["indv_id"].values[0]]
 
-        size = np.array(dsi.params["size"]) +(1,0) # this was for size=(35,35) diamond, not sure if it's general
-        grid_size = (size).tolist()
-        states = load_states(dsi, [t_start, t_end], grid_size=grid_size, spin_dir=(1,1))
+        if luckyknot:
+            size = np.array(dsi.params["size"])
+            grid_size = (size * 2 + 1).tolist()
+            spin_dir = (1, 0)
+        else:
+            size = np.array(dsi.params["size"]) +(1,0) # this was for size=(35,35) diamond, not sure if it's general
+            grid_size = (size).tolist()
+            spin_dir = (1, 1)
+        states = load_states(dsi, [t_start, t_end], grid_size=grid_size, spin_dir=spin_dir)
 
         _, n_comp_start = skimage.measure.label(states[0], background=0, connectivity=2, return_num=True)
 
