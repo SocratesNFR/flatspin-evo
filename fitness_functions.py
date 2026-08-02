@@ -396,7 +396,7 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, 
 
         if luckyknot:
             size = np.array(dsi.params["size"])
-            grid_size = (size * 2 + 1).tolist()
+            grid_size = (size).tolist()
             spin_dir = (1, 0)
         else:
             size = np.array(dsi.params["size"]) +(1,0) # this was for size=(35,35) diamond, not sure if it's general
