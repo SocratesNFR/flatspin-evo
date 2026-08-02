@@ -114,9 +114,19 @@ def main(
     param_template = individual_class.get_default_param_template(**individual_params)
     init_evolved_params(param_template, evolved_params)
 
+    def print_optimizer_chain(opt, depth=0):
+        print("  " * depth + f"{opt.name} ({type(opt).__name__})")
+        if hasattr(opt, "optim"):
+            print_optimizer_chain(opt.optim, depth + 1)
+        if hasattr(opt, "optimizers"):  # portfolios hold a list
+            for sub in opt.optimizers:
+                print_optimizer_chain(sub, depth + 1)
+
+
     optimizer = ng.optimizers.NGOpt(
         parametrization=param_template, budget=pop_size * generation_num, num_workers=1)
 
+    print_optimizer_chain(optimizer)
     gen_times = []
     best = None
     for gen in range(starting_gen, generation_num):
@@ -127,7 +137,36 @@ def main(
         time = datetime.now()
 
 
-        batch = [ optimizer.ask() for _ in range(pop_size) ]
+        # batch = [ optimizer.ask() for _ in range(pop_size) ]
+
+        try:
+            batch = [optimizer.ask() for _ in range(pop_size)]
+        except KeyError as e:
+            # walk the chain to find the PSO-like optimizer with .population/._uid_queue
+            def find_broken(opt):
+                found = []
+                if hasattr(opt, "population") and hasattr(opt, "_uid_queue"):
+                    found.append(opt)
+                if hasattr(opt, "optim"):
+                    found += find_broken(opt.optim)
+                if hasattr(opt, "optimizers"):
+                    for sub in opt.optimizers:
+                        found += find_broken(sub)
+                return found
+
+            for sub in find_broken(optimizer):
+                pop_keys = set(sub.population.keys())
+                queue_asked = set(getattr(sub._uid_queue, "asked", []))
+                queue_all = set(getattr(sub._uid_queue, "order", []))  # attribute name may vary by version
+                print(f"{sub.name}: population has {len(pop_keys)} entries")
+                print(f"  missing uid {e.args[0]} in population: {e.args[0] not in pop_keys}")
+                print(f"  uid in queue.asked: {e.args[0] in queue_asked}")
+                print(f"  population keys sample: {list(pop_keys)[:5]}")
+            raise
+
+
+        batch_uids = [b.uid for b in batch]
+        assert len(set(batch_uids)) == len(batch_uids), "duplicate uids in batch!"
 
         pop = [individual_class(params=deepcopy(params.value), **individual_params) for params in batch]
 
@@ -147,6 +186,7 @@ def main(
         for indv in pop:
             indv.fitness = sum(indv.fitness_components)
         for b, indv in zip(batch, pop[:len(batch)]): # skip the best recommendation if it was added
+            assert b.uid in batch_uids, "batch uid not found in batch_uids"
             optimizer.tell(b, indv.fitness if minimize_fitness else -indv.fitness)
 
         best = update_superdataset(
