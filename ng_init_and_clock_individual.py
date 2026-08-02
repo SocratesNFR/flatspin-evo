@@ -19,11 +19,7 @@ class NG_Init_And_Clock_Individual(NG_Individual):
     @staticmethod
     def get_default_param_template(index_map=(), **kwargs):
         return ng.p.Dict(
-            init=ng.p.Tuple(*[
-                ng.p.Choice([False, True])
-                for _ in range(len(index_map))
-            ]),
-
+            init = ng.p.Array(shape=(len(index_map),), lower=0, upper=1).set_integer_casting(),
             field_order=ng.p.Array(shape=(8,))
                 .set_mutation(sigma=(1 - 0) / 6)
                 .set_bounds(0, 1),
