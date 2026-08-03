@@ -411,16 +411,18 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, 
 
         in_comps = set(np.unique(end))
         ((ir00, ir01), (ir10, ir11)) = ignore_range
-        states[1][ir00:ir01, ir10:ir11] = 0
+        end[ir00:ir01, ir10:ir11] = 0
         out_comps = set(np.unique(end))
 
-        end_score = len(out_comps - in_comps)
+        n_exclusive_out = len(out_comps - in_comps)
+        n_out = len(out_comps) - 1 # subtract 1 for the background component
 
         # if want to cut middle after instead.
         # end[10:20, 10:20] = 0
         # n_comp_end = len(np.unique(end)) - 1
 
-        score = end_score - max(n_comp_start, 1)
+        # score = end_score - max(n_comp_start, 1)
+        score = n_out + n_exclusive_out - max(n_comp_start, 1) # domains completely outside get a bonus
         indv.fitness_components = (indv.fitness_components or []) + [score]
 
     individual_class.flatspin_eval(pop, run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
