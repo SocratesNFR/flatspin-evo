@@ -380,7 +380,7 @@ def jousting_fitness(pops, gen, outdir, dependent_params={}, n_fights=3, **kwarg
 
     individual_class.flatspin_eval(list(id2indv.values()), run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
 
-def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, **kwargs):
+def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, ignore_range=((20,30),(20,30)),**kwargs):
     individual_class = type(pop[0])
 
     init_dir = os.path.join(outdir, "init")
@@ -406,12 +406,22 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, 
 
         _, n_comp_start = skimage.measure.label(states[0], background=0, connectivity=2, return_num=True)
 
-        _, n_comp_end = skimage.measure.label(states[1], background=0, connectivity=2, return_num=True)
-        score = n_comp_end - max(n_comp_start, 1)
 
+        end, n_comp_end = skimage.measure.label(states[1], background=0, connectivity=2, return_num=True)
+
+        in_comps = set(np.unique(end))
+        ((ir00, ir01), (ir10, ir11)) = ignore_range
+        states[1][ir00:ir01, ir10:ir11] = 0
+        out_comps = set(np.unique(end))
+
+        end_score = len(out_comps - in_comps)
+
+        # if want to cut middle after instead.
+        # end[10:20, 10:20] = 0
+        # n_comp_end = len(np.unique(end)) - 1
+
+        score = end_score - max(n_comp_start, 1)
         indv.fitness_components = (indv.fitness_components or []) + [score]
-
-
 
     individual_class.flatspin_eval(pop, run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
 
