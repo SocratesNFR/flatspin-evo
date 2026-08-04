@@ -380,7 +380,7 @@ def jousting_fitness(pops, gen, outdir, dependent_params={}, n_fights=3, **kwarg
 
     individual_class.flatspin_eval(list(id2indv.values()), run_params, score_func=fit_func, gen=gen, outdir=outdir, **kwargs)
 
-def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, ignore_range=((20,30),(20,30)),**kwargs):
+def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False,t_check_first=16, border=4, ignore_range=((20,30),(20,30)),**kwargs):
     individual_class = type(pop[0])
 
     init_dir = os.path.join(outdir, "init")
@@ -402,6 +402,23 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False, 
             size = np.array(dsi.params["size"]) +(1,0) # this was for size=(35,35) diamond, not sure if it's general
             grid_size = (size).tolist()
             spin_dir = (1, 1)
+
+
+        # ---  check border over the first t_check_first states ---
+        early_states = load_states(dsi, list(range(t_check_first)), grid_size=grid_size, spin_dir=spin_dir)
+        early_states = np.asarray(early_states)  # shape: (t_check_first, H, W)
+
+        border_clean = (
+            np.all(early_states[:, :border, :] == 0) and
+            np.all(early_states[:, -border:, :] == 0) and
+            np.all(early_states[:, :, :border] == 0) and
+            np.all(early_states[:, :, -border:] == 0)
+        )
+
+        if not border_clean:
+            indv.fitness_components = (indv.fitness_components or []) + [-50]
+            return
+
         states = load_states(dsi, [t_start, t_end], grid_size=grid_size, spin_dir=spin_dir)
 
         _, n_comp_start = skimage.measure.label(states[0], background=0, connectivity=2, return_num=True)
