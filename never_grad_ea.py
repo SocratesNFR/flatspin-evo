@@ -97,6 +97,7 @@ def main(
     starting_gen=0,
     dataset_params=None,
     random_seed=0,
+    num_workers=1,
     **kwargs,
 ):
 
@@ -122,8 +123,9 @@ def main(
     param_template = individual_class.get_default_param_template(**individual_params)
     init_evolved_params(param_template, evolved_params)
 
-    optimizer = ng.optimizers.NGOpt(
-        parametrization=param_template, budget=pop_size * generation_num, num_workers=1)
+    optimizer = ng.optimizers.registry["TwoPointsDE"](
+    parametrization=param_template, budget=pop_size * generation_num, num_workers=num_workers
+    )
 
     print_optimizer_chain(optimizer)
     gen_times = []
