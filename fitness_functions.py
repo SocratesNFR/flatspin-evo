@@ -434,7 +434,7 @@ def proliferate_fitness(pop, gen, outdir, t_start=7, t_end=-1, luckyknot=False,t
         out_comps, counts = np.unique(end, return_counts=True)
         out_comps = out_comps[counts >= min_domain_size]
 
-        n_exclusive_out = len(out_comps - in_comps)
+        n_exclusive_out = len(out_comps) - len(in_comps)
         n_out = len(out_comps) - 1 # subtract 1 for the background component
 
         # if want to cut middle after instead.
