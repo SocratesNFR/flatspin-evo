@@ -4,19 +4,22 @@ import numpy as np
 
 from ribs.emitters import EmitterBase
 
-N_STRATEGY = 2  # [log_sigma, log_flip_prob]
 
 
 @dataclass(frozen=True)
 class GenomeLayout:
-    """Genome layout: [real genes | binary genes | log_sigma, log_flip_prob]."""
+    """Genome layout: [real genes | binary genes | log_sigma per real gene, log_flip_prob]."""
 
     n_real: int
     n_binary: int
 
     @property
+    def n_strategy(self):
+        return self.n_real + 1  # one sigma per real gene + one shared flip prob
+
+    @property
     def solution_dim(self):
-        return self.n_real + self.n_binary + N_STRATEGY
+        return self.n_real + self.n_binary + self.n_strategy
 
     @property
     def real(self):
@@ -29,6 +32,17 @@ class GenomeLayout:
     @property
     def strategy(self):
         return slice(self.n_real + self.n_binary, self.solution_dim)
+
+    @property
+    def sigmas(self):
+        """Strategy genes holding log_sigma for each real gene."""
+        start = self.n_real + self.n_binary
+        return slice(start, start + self.n_real)
+
+    @property
+    def flip_prob(self):
+        """Index of the strategy gene holding log_flip_prob."""
+        return self.solution_dim - 1
 
 
 class MixedMutationEmitter(EmitterBase):
@@ -64,8 +78,10 @@ class MixedMutationEmitter(EmitterBase):
 
         if flip_prob_range is None:
             flip_prob_range = (0.1 / layout.n_binary, 0.5)
-        strategy_lo = np.log([sigma_range[0], flip_prob_range[0]])
-        strategy_hi = np.log([sigma_range[1], flip_prob_range[1]])
+        strategy_lo = np.concatenate([np.full(layout.n_real, np.log(sigma_range[0])),
+                                    [np.log(flip_prob_range[0])]])
+        strategy_hi = np.concatenate([np.full(layout.n_real, np.log(sigma_range[1])),
+                                    [np.log(flip_prob_range[1])]])
 
         lower_bounds = np.concatenate([real_lo, np.zeros(layout.n_binary), strategy_lo])
         upper_bounds = np.concatenate([real_hi, np.ones(layout.n_binary), strategy_hi])
@@ -87,7 +103,7 @@ class MixedMutationEmitter(EmitterBase):
         self._strategy_lo = strategy_lo
         self._strategy_hi = strategy_hi
         self._rng = np.random.default_rng(seed)
-   
+
     def _random_genomes(self, n):
         lay = self._layout
         genomes = np.empty((n, lay.solution_dim))
@@ -95,30 +111,28 @@ class MixedMutationEmitter(EmitterBase):
             self._real_lo, self._real_hi, size=(n, lay.n_real))
         genomes[:, lay.binary] = self._rng.integers(0, 2, size=(n, lay.n_binary))
         genomes[:, lay.strategy] = self._rng.uniform(
-            self._strategy_lo, self._strategy_hi, size=(n, N_STRATEGY))
+            self._strategy_lo, self._strategy_hi, size=(n, lay.n_strategy))
         return genomes
 
     # --- mutation operators (each modifies `genomes` in place) ----------
 
+    def _mutate_strategy(self, genomes):
+        """Log-normal update of every strategy gene (independent noise for each)."""
+        lay = self._layout
+        noise = self._rng.normal(scale=self._tau, size=(len(genomes), lay.n_strategy))
+        genomes[:, lay.strategy] = np.clip(
+            genomes[:, lay.strategy] + noise, self._strategy_lo, self._strategy_hi)
+
     def _mutate_gaussian(self, genomes):
         lay = self._layout
-        sigma = np.exp(genomes[:, lay.strategy][:, 0])[:, None]  # (n, 1)
+        sigma = np.exp(genomes[:, lay.sigmas])  # (n, n_real), one per gene
         noise = self._rng.normal(size=(len(genomes), lay.n_real))
         genomes[:, lay.real] = np.clip(
             genomes[:, lay.real] + sigma * noise, self._real_lo, self._real_hi)
 
-    def _mutate_strategy(self, genomes):
-        """Log-normal update of log_sigma and log_flip_prob."""
-        lay = self._layout
-        noise = self._rng.normal(scale=self._tau, size=(len(genomes), N_STRATEGY))
-        genomes[:, lay.strategy] = np.clip(
-            genomes[:, lay.strategy] + noise, self._strategy_lo, self._strategy_hi)
-
-
-
     def _mutate_bitflip(self, genomes):
         lay = self._layout
-        flip_prob = np.exp(genomes[:, lay.strategy][:, 1])[:, None]  # (n, 1)
+        flip_prob = np.exp(genomes[:, lay.flip_prob])[:, None]  # (n, 1), shared by all bits
         flips = self._rng.random((len(genomes), lay.n_binary)) < flip_prob
         bits = genomes[:, lay.binary]
         genomes[:, lay.binary] = np.where(flips, 1 - bits, bits)
