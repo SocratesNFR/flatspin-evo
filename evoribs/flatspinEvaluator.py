@@ -174,7 +174,7 @@ class FlatspinEvaluator(Evaluator):
     # --- analysis ----------------------------------------------------------
 
     def evaluate_run(self, ds):
-        result = self.evaluation_func(ds, **self.evaluation_args)  # whatever you named this attribute
+        result = self.evaluation_func(ds, **self.evaluation_params)
         info = dict(result[2]) if len(result) > 2 else {}
         return result[0], result[1], info
 
