@@ -21,9 +21,10 @@ def example_evaluation(ds,*, param1):
 
 
 
-def load_states(ds, t=slice(None), spin_dir=(1,1), grid_size=None):
+def load_states(ds, t=slice(None), spin_dir=(1,0), grid_size=None):
     """
-    use spin_dir=(1,1) for pinwheel diamond , then -1 -> off and +1 -> on
+    use spin_dir=(1,0) for pinwheel diamond , then -1 -> off and +1 -> on
+    for pinhweel diamond use grid_size = 2*model.size + 1
     """
 
     states = load_output(ds, "mag", grid_size=grid_size, t=t, flatten=False)
@@ -63,29 +64,24 @@ def border_activity(states, thickness):
     return states[:, border].any(axis=1)
 
 @evaluation(measure_dim=2)
-def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0, spin_dir=(1,1), illegal_border_size=None):
+def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
+                         spin_dir=(1, 0), illegal_border_size=None):
+    states = load_states(ds, t=slice(burn_in, None, state_step),
+                         grid_size=grid_size, spin_dir=spin_dir)
+    masses = np.array([largest_domain_mass(s) for s in states])
 
-        t=slice(burn_in, None, state_step)
-        states = load_states(ds, t=t, grid_size=grid_size, spin_dir=spin_dir)
+    fail = (np.nan, [np.nan, np.nan], {})
+    if np.any(masses == 0):
+        return fail
+    if illegal_border_size and border_activity(states, illegal_border_size).any():
+        return fail
 
-        masses = np.array([largest_domain_mass(s) for s in states]) / states[0].size
+    mean_mass = float(np.mean(masses))
+    cycle_len = find_cycle_length(states)
 
-        return_on_fail = np.nan, [np.nan, np.nan]
-        if np.any(masses == 0):
-            return return_on_fail
+    fitness = 0
+    if cycle_len == len(states):
+        fitness = -np.sum(np.abs(np.diff(masses)))
 
-        if illegal_border_size and border_activity(states, illegal_border_size).any():
-            return return_on_fail
-
-        mean_mass = np.mean(masses)
-        cycle_len = find_cycle_length(states)
-
-        fitness = 0
-        if cycle_len == len(states):
-            diff = np.diff(masses, axis=0)
-            fitness = -np.sum(np.abs(diff))
-
-
-        
-        return fitness, [cycle_len/len(states), mean_mass]
-
+    info = {"cycle_len": cycle_len, "cycle_steps": cycle_len * state_step, "mean_mass": mean_mass}
+    return fitness, [cycle_len / len(states), mean_mass / states[0].size], info

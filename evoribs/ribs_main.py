@@ -11,18 +11,20 @@ from flatspin.data import Dataset
 from MixedEmitter import MixedMutationEmitter
 
 
-def update_superdataset(dataset, outdir, gen, ids, objectives, measures):
+def update_superdataset(dataset, outdir, gen, ids, objectives, measures, infos):
     """Appends one row per individual to the superdataset, combining the
     run parameters from gen{gen} with the objective and measures."""
     batch = Dataset.read(os.path.join(outdir, f"gen{gen}"))
 
     rows = []
-    for indv_id, obj, meas in zip(ids, objectives, measures):
+    for indv_id, obj, meas, info in zip(ids, objectives, measures, infos):
         ind = batch.filter(indv_id=indv_id).index.copy()
         ind["gen"] = gen
         ind["objective"] = obj
         for i, m in enumerate(meas):
             ind[f"measure{i}"] = m
+        for key, value in info.items():
+            ind[key] = value
         ind["outdir"] = ind["outdir"].apply(lambda o: os.path.join(f"gen{gen}", o))
         rows.append(ind)
 
@@ -48,7 +50,8 @@ def main(evaluator, archive=None, total_itrs=100, batch_size=32, seed=None):
             solution_dim=layout.solution_dim,
             measure_dim=evaluator.measure_dim,
             capacity=200,
-            k_neighbors=7,
+            k_neighbors=5,
+            extra_fields={"indv_id": ((), np.int64)},
         )
 
     emitter = MixedMutationEmitter(archive, layout=layout, batch_size=batch_size, seed=seed)
@@ -58,14 +61,15 @@ def main(evaluator, archive=None, total_itrs=100, batch_size=32, seed=None):
 
     for itr in trange(0, total_itrs, file=sys.stdout, desc="Generations"):
         solutions = emitter.ask()
-        objectives, measures, ids = evaluator.evaluate(solutions)
+        objectives, measures, ids, infos = evaluator.evaluate(solutions)
 
         valid = np.isfinite(objectives) & np.isfinite(measures).all(axis=1)
         if valid.any():
             archive.add(solution=solutions[valid], objective=objectives[valid],
-                        measures=measures[valid])
-            update_superdataset(dataset, outdir, evaluator.last_gen,
-                                ids[valid], objectives[valid], measures[valid])
+                        measures=measures[valid], indv_id=ids[valid])
+            update_superdataset(dataset, outdir, evaluator.last_gen, ids[valid],
+                                objectives[valid], measures[valid],
+                                [infos[i] for i in np.flatnonzero(valid)])
             dataset.save()
 
         tqdm.write(f"itr {itr}: {valid.sum()}/{len(valid)} valid, archive size {len(archive)}")

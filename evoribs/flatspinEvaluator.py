@@ -23,6 +23,7 @@ def is_not_ready(e: Exception) -> bool:
     """True if the exception just means the run's output isn't ready yet."""
     return (
         isinstance(e, FileNotFoundError)
+        or (isinstance(e, EOFError))
         or (isinstance(e, AssertionError)
             and "No vector data found for quantity: mag" in str(e))
         or "Bad magic number" in str(e)
@@ -173,10 +174,10 @@ class FlatspinEvaluator(Evaluator):
     # --- analysis ----------------------------------------------------------
 
     def evaluate_run(self, ds):
-        """Runs the selected evaluation function on one run. Must be safe to call
-        repeatedly, since it is retried until the output is ready."""
-        return self.evaluation_func(ds, **self.evaluation_params)
-    
+        result = self.evaluation_func(ds, **self.evaluation_args)  # whatever you named this attribute
+        info = dict(result[2]) if len(result) > 2 else {}
+        return result[0], result[1], info
+
     def collect(self, basepath: str) -> dict:
         """Analyses runs as their output becomes available.
 
@@ -228,7 +229,8 @@ class FlatspinEvaluator(Evaluator):
 
         objectives = np.array([results[i][0] for i in ids], dtype=float)
         measures = np.array([results[i][1] for i in ids], dtype=float)
-        return objectives, measures, np.array(ids)
+        infos = [results[i][2] for i in ids]
+        return objectives, measures, np.array(ids), infos
 
     @classmethod
     def main(cls):
