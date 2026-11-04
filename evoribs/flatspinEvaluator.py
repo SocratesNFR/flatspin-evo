@@ -20,13 +20,13 @@ from flatspin.cmdline import StoreKeyValue, eval_params
 
 
 def is_not_ready(e: Exception) -> bool:
-    """True if the exception just means the run's output isn't ready yet."""
+    msg = str(e)
     return (
         isinstance(e, FileNotFoundError)
-        or (isinstance(e, EOFError))
-        or (isinstance(e, AssertionError)
-            and "No vector data found for quantity: mag" in str(e))
-        or "Bad magic number" in str(e)
+        or (isinstance(e, EOFError) and "No data left in file" in msg)
+        or (isinstance(e, AssertionError) and "No vector data found for quantity: mag" in msg)
+        or "File is not a zip file" in msg
+        or "Bad magic number" in msg
     )
 
 
