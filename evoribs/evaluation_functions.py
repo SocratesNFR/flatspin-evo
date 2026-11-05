@@ -65,7 +65,8 @@ def border_activity(states, thickness):
 
 @evaluation(measure_dim=2)
 def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
-                         spin_dir=(1, 0), illegal_border_size=None, objective2=None):
+                         spin_dir=(1, 0), illegal_border_size=None, objective2=None,
+                         mass_log_range=(0.6, 2.3)):
     states = load_states(ds, t=slice(burn_in, None, state_step),
                          grid_size=grid_size, spin_dir=spin_dir)
     masses = states.sum(axis=(1, 2))  # total active cells per frame
@@ -77,6 +78,10 @@ def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
         return fail
 
     mean_mass = float(np.mean(masses))
+    lo, hi = mass_log_range
+    mass_measure = (float(np.clip(np.log10(mean_mass), lo, hi)) - lo) / (hi - lo)
+
+
     cycle_len = find_cycle_length(states)
     is_cyclic = cycle_len < len(states)
 
@@ -90,4 +95,4 @@ def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
 
     info = {"cycle_len": cycle_len, "mean_mass": mean_mass,
             "mode": "cycle" if is_cyclic else ("glide" if achieved else "none")}
-    return fitness, [cycle_len / len(states), mean_mass / states[0].size], info
+    return fitness, [cycle_len / len(states), mass_measure], info
