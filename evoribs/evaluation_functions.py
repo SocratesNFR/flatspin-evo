@@ -65,10 +65,10 @@ def border_activity(states, thickness):
 
 @evaluation(measure_dim=2)
 def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
-                         spin_dir=(1, 0), illegal_border_size=None):
+                         spin_dir=(1, 0), illegal_border_size=None, objective2=None):
     states = load_states(ds, t=slice(burn_in, None, state_step),
                          grid_size=grid_size, spin_dir=spin_dir)
-    masses = np.array([largest_domain_mass(s) for s in states])
+    masses = states.sum(axis=(1, 2))  # total active cells per frame
 
     fail = (np.nan, [np.nan, np.nan], {})
     if np.any(masses == 0):
@@ -78,10 +78,16 @@ def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
 
     mean_mass = float(np.mean(masses))
     cycle_len = find_cycle_length(states)
+    is_cyclic = cycle_len < len(states)
 
-    fitness = 0
-    if cycle_len == len(states):
-        fitness = -np.sum(np.abs(np.diff(masses)))
+    # Primary objective: 0 means the goal is met (cycles, or glides with constant mass).
+    fitness = 0.0 if is_cyclic else -float(np.sum(np.abs(np.diff(masses))))
 
-    info = {"cycle_len": cycle_len, "cycle_steps": cycle_len * state_step, "mean_mass": mean_mass}
+    achieved = fitness == 0
+    if achieved and objective2 is not None:
+        fitness = objective2(states, masses, is_cyclic, cycle_len)
+        assert fitness >= 0, "secondary_objective must be positive"
+
+    info = {"cycle_len": cycle_len, "mean_mass": mean_mass,
+            "mode": "cycle" if is_cyclic else ("glide" if achieved else "none")}
     return fitness, [cycle_len / len(states), mean_mass / states[0].size], info
