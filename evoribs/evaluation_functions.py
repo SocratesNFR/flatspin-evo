@@ -2,7 +2,7 @@ import numpy as np # type: ignore
 from scipy import ndimage # type: ignore
 from skimage import measure # pyright: ignore[reportMissingModuleSource]
 
-from flatspin.data import load_output
+from flatspin.data import load_output, read_table
 
 EVALUATIONS = {}
 
@@ -90,9 +90,17 @@ def novelty_life_fitness(ds, *, grid_size=None, state_step=1, burn_in=0,
 
     achieved = fitness == 0
     if achieved and objective2 is not None:
-        fitness = objective2(states, masses, is_cyclic, cycle_len)
+        fitness = leeway_fitness(ds, cycle_len, state_step)
+        if (not np.isfinite(fitness)) or (fitness < 0):
+            fitness = 0
         assert fitness >= 0, "secondary_objective must be positive"
 
     info = {"cycle_len": cycle_len, "mean_mass": mean_mass,
             "mode": "cycle" if is_cyclic else ("glide" if achieved else "none")}
     return fitness, [cycle_len / len(states), mass_measure], info
+
+def leeway_fitness(ds, cycle_len, steps_per_cycle):
+    if cycle_len < 2:  # don't evaluate still life
+        return 0.0
+    leeway = read_table(ds.tablefile("leeway"))["leeway"].to_numpy()
+    return float(np.min(leeway[-(cycle_len * steps_per_cycle):]))
