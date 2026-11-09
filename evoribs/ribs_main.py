@@ -35,7 +35,7 @@ def update_superdataset(dataset, outdir, gen, ids, objectives, measures, infos):
     dataset.index = pd.concat(frames, ignore_index=True)
 
 
-def main(evaluator, archive=None, total_itrs=100, batch_size=32, seed=None):
+def main(evaluator, total_itrs=100, batch_size=32, seed=None, archive_capacity=200, k_neighbors=5):
     """Runs the QD loop.
 
     `evaluator.evaluate` must return (objectives, measures, ids). Individuals
@@ -45,14 +45,13 @@ def main(evaluator, archive=None, total_itrs=100, batch_size=32, seed=None):
     layout = evaluator.layout
     outdir = evaluator.outdir
 
-    if archive is None:
-        archive = DNSArchive(
-            solution_dim=layout.solution_dim,
-            measure_dim=evaluator.measure_dim,
-            capacity=200,
-            k_neighbors=5,
-            extra_fields={"indv_id": ((), np.int64)},
-        )
+    archive = DNSArchive(
+        solution_dim=layout.solution_dim,
+        measure_dim=evaluator.measure_dim,
+        capacity=archive_capacity,
+        k_neighbors=k_neighbors,
+        extra_fields={"indv_id": ((), np.int64)},
+    )
 
     emitter = MixedMutationEmitter(archive, layout=layout, batch_size=batch_size, seed=seed)
 

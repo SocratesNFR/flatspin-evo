@@ -254,6 +254,8 @@ class FlatspinEvaluator(Evaluator):
         parser.add_argument("-n", "--itrs", type=int, default=100, help="number of QD iterations")
         parser.add_argument("--batch_size", type=int, default=32)
         parser.add_argument("--seed", type=int, default=None)
+        parser.add_argument("--archive_capacity", type=int, default=200)
+        parser.add_argument("--k_neighbors", type=int, default=5)
         args = parser.parse_args()
         evaluator = cls(
             outdir=args.output,
@@ -263,7 +265,7 @@ class FlatspinEvaluator(Evaluator):
             gene_params=eval_params(args.genome_param),
             **eval_params(args.parameter),
         )
-        ribs_main.main(evaluator, total_itrs=args.itrs, batch_size=args.batch_size, seed=args.seed)
+        ribs_main.main(evaluator, total_itrs=args.itrs, batch_size=args.batch_size, seed=args.seed, archive_capacity=args.archive_capacity, k_neighbors=args.k_neighbors)
 
 if __name__ == "__main__": # put this in your subclass, dont run this one
     FlatspinEvaluator.main()
